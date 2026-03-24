@@ -1,0 +1,898 @@
+/* ════════════════════════════════════
+   NEXUS VIRTUAL ASSISTANT STYLES
+   ════════════════════════════════════ */
+
+.aria-root {
+    --cyan: #00f5ff;
+    --a-blue: #0066ff;
+    --a-purple: #7b2fff;
+    --a-dark: #060a14;
+    --a-panel: rgba(6, 12, 28, 0.92);
+    --a-glass: rgba(0, 245, 255, 0.06);
+    --a-border: rgba(0, 245, 255, 0.18);
+    --a-text: #c8e8ff;
+    --a-dim: rgba(200, 232, 255, 0.45);
+    --a-glow: 0 0 20px rgba(0, 245, 255, 0.35), 0 0 60px rgba(0, 102, 255, 0.15);
+
+    font-family: 'Exo 2', var(--font-outfit), sans-serif;
+    user-select: none;
+}
+
+/* All interactive children need pointer-events back since root is none */
+.aria-root .side-tab,
+.aria-root .pet,
+.aria-root .mini-panel.open,
+.aria-root .fs-panel.open {
+    pointer-events: auto;
+}
+
+/* ════════════════════════════════════
+   SIDE TRIGGER TAB
+════════════════════════════════════ */
+.aria-root .side-tab {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 96px;
+    background: linear-gradient(180deg, var(--a-blue), var(--a-purple));
+    border-radius: 12px 0 0 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    z-index: 9000;
+    box-shadow: -4px 0 24px rgba(0, 102, 255, 0.4), var(--a-glow);
+    transition: width .25s, background .25s;
+}
+
+.aria-root .side-tab:hover {
+    width: 44px;
+    background: linear-gradient(180deg, var(--cyan), var(--a-blue));
+}
+
+.aria-root .tab-dots {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.aria-root .tab-dots span {
+    display: block;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+    animation: ariaDotPulse 1.6s ease-in-out infinite;
+}
+
+.aria-root .tab-dots span:nth-child(2) {
+    animation-delay: .2s
+}
+
+.aria-root .tab-dots span:nth-child(3) {
+    animation-delay: .4s
+}
+
+@keyframes ariaDotPulse {
+
+    0%,
+    100% {
+        opacity: .4;
+        transform: scale(1)
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.4)
+    }
+}
+
+/* ════════════════════════════════════
+   FLOATING PET
+════════════════════════════════════ */
+.aria-root .pet {
+    position: fixed;
+    width: 88px;
+    height: 88px;
+    bottom: 80px;
+    right: 80px;
+    cursor: grab;
+    z-index: 9500;
+    filter: drop-shadow(0 0 16px rgba(0, 245, 255, 0.55));
+    transition: filter .2s;
+    animation: ariaPetFloat 3.5s ease-in-out infinite;
+}
+
+.aria-root .pet:active {
+    cursor: grabbing;
+    animation: none;
+}
+
+.aria-root .pet:hover {
+    filter: drop-shadow(0 0 28px rgba(0, 245, 255, 0.9));
+}
+
+.aria-root .pet svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Eye blink */
+.aria-root .pet.blink .pet-eye-left,
+.aria-root .pet.blink .pet-eye-right {
+    animation: ariaEyeBlink .12s forwards;
+}
+
+@keyframes ariaEyeBlink {
+    0% {
+        transform: scaleY(1)
+    }
+
+    50% {
+        transform: scaleY(0.08)
+    }
+
+    100% {
+        transform: scaleY(1)
+    }
+}
+
+@keyframes ariaPetFloat {
+
+    0%,
+    100% {
+        transform: translateY(0px) rotate(-1deg)
+    }
+
+    50% {
+        transform: translateY(-12px) rotate(1deg)
+    }
+}
+
+/* Tail wag */
+.aria-root .pet-tail {
+    transform-origin: 50% 20%;
+    animation: ariaTailWag 2s ease-in-out infinite;
+}
+
+@keyframes ariaTailWag {
+
+    0%,
+    100% {
+        transform: rotate(-8deg)
+    }
+
+    50% {
+        transform: rotate(8deg)
+    }
+}
+
+/* ════════════════════════════════════
+   MINI PANEL
+════════════════════════════════════ */
+.aria-root .mini-panel {
+    position: fixed;
+    right: 54px;
+    top: 50%;
+    transform: translateY(-50%) scaleX(0);
+    transform-origin: right center;
+    width: 320px;
+    background: var(--a-panel);
+    border: 1px solid var(--a-border);
+    border-radius: 16px 0 0 16px;
+    backdrop-filter: blur(24px);
+    z-index: 9100;
+    overflow: hidden;
+    transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), opacity .25s;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: -8px 0 48px rgba(0, 102, 255, 0.25), var(--a-glow);
+}
+
+.aria-root .mini-panel.open {
+    transform: translateY(-50%) scaleX(1);
+    opacity: 1;
+    pointer-events: all;
+}
+
+.aria-root .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--a-border);
+    background: linear-gradient(90deg, rgba(0, 102, 255, 0.12), rgba(0, 245, 255, 0.06));
+}
+
+.aria-root .panel-title {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.aria-root .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #00ff88;
+    box-shadow: 0 0 8px #00ff88;
+    animation: ariaStatusPulse 2s ease-in-out infinite;
+}
+
+@keyframes ariaStatusPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 8px #00ff88
+    }
+
+    50% {
+        opacity: .5;
+        box-shadow: 0 0 3px #00ff88
+    }
+}
+
+.aria-root .panel-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.aria-root .panel-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--a-border);
+    background: var(--a-glass);
+    color: var(--a-dim);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: all .18s;
+    font-size: 13px;
+}
+
+.aria-root .panel-btn:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0, 245, 255, 0.1);
+    box-shadow: 0 0 12px rgba(0, 245, 255, 0.2);
+}
+
+.aria-root .panel-body {
+    padding: 14px 18px 18px;
+}
+
+/* Chat bubble */
+.aria-root .aria-bubble {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.aria-root .aria-avatar {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--a-blue), var(--a-purple));
+    border: 1px solid var(--a-border);
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+}
+
+.aria-root .aria-message {
+    background: var(--a-glass);
+    border: 1px solid var(--a-border);
+    border-radius: 4px 12px 12px 12px;
+    padding: 10px 12px;
+    font-size: .82rem;
+    line-height: 1.55;
+    color: var(--a-text);
+    flex: 1;
+}
+
+.aria-root .aria-message strong {
+    color: var(--cyan);
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    letter-spacing: .05em;
+}
+
+/* Stats grid */
+.aria-root .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.aria-root .stat-card {
+    background: var(--a-glass);
+    border: 1px solid var(--a-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    transition: border-color .2s, box-shadow .2s;
+}
+
+.aria-root .stat-card:hover {
+    border-color: rgba(0, 245, 255, 0.4);
+    box-shadow: 0 0 16px rgba(0, 245, 255, 0.1);
+}
+
+.aria-root .stat-label {
+    font-size: .68rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--a-dim);
+    margin-bottom: 4px;
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+}
+
+.aria-root .stat-value {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--cyan);
+}
+
+.aria-root .stat-bar {
+    margin-top: 5px;
+    height: 3px;
+    background: rgba(0, 245, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.aria-root .stat-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--a-blue), var(--cyan));
+    transition: width 1s ease;
+}
+
+/* Quick actions */
+.aria-root .quick-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.aria-root .quick-btn {
+    flex: 1;
+    min-width: 60px;
+    padding: 7px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--a-border);
+    background: var(--a-glass);
+    color: var(--a-text);
+    cursor: pointer;
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: .78rem;
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-align: center;
+    transition: all .18s;
+}
+
+.aria-root .quick-btn:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0, 245, 255, 0.08);
+    box-shadow: 0 0 12px rgba(0, 245, 255, 0.15);
+}
+
+.aria-root .quick-btn .qb-icon {
+    font-size: 1rem;
+    display: block;
+    margin-bottom: 2px;
+}
+
+/* Chat input */
+.aria-root .chat-input-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.aria-root .chat-input {
+    flex: 1;
+    background: var(--a-glass);
+    border: 1px solid var(--a-border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: var(--a-text);
+    font-family: 'Exo 2', var(--font-outfit), sans-serif;
+    font-size: .8rem;
+    outline: none;
+    transition: border-color .2s;
+}
+
+.aria-root .chat-input::placeholder {
+    color: var(--a-dim);
+}
+
+.aria-root .chat-input:focus {
+    border-color: rgba(0, 245, 255, 0.5);
+}
+
+.aria-root .chat-send {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--a-border);
+    background: linear-gradient(135deg, var(--a-blue), var(--a-purple));
+    color: #fff;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    transition: all .18s;
+    flex-shrink: 0;
+}
+
+.aria-root .chat-send:hover {
+    background: linear-gradient(135deg, var(--cyan), var(--a-blue));
+    box-shadow: 0 0 16px rgba(0, 245, 255, 0.3);
+}
+
+/* ════════════════════════════════════
+   FULLSCREEN OVERLAY
+════════════════════════════════════ */
+.aria-root .fs-panel {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 8, 20, 0.97);
+    backdrop-filter: blur(32px);
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .35s;
+}
+
+.aria-root .fs-panel.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.aria-root .fs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--a-border);
+    background: linear-gradient(90deg, rgba(0, 102, 255, 0.1), transparent);
+    flex-shrink: 0;
+}
+
+.aria-root .fs-logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.aria-root .fs-logo-icon {
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(135deg, var(--a-blue), var(--a-purple));
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 20px rgba(0, 102, 255, 0.4);
+    font-size: 22px;
+}
+
+.aria-root .fs-logo-text {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: .15em;
+    color: var(--cyan);
+    text-transform: uppercase;
+}
+
+.aria-root .fs-logo-sub {
+    font-size: .7rem;
+    letter-spacing: .2em;
+    color: var(--a-dim);
+    text-transform: uppercase;
+}
+
+.aria-root .fs-close {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--a-border);
+    background: var(--a-glass);
+    color: var(--a-dim);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    transition: all .18s;
+}
+
+.aria-root .fs-close:hover {
+    border-color: #ff4466;
+    color: #ff4466;
+    background: rgba(255, 68, 102, 0.1);
+    box-shadow: 0 0 16px rgba(255, 68, 102, 0.2);
+}
+
+.aria-root .fs-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    background: var(--a-border);
+    overflow: hidden;
+}
+
+.aria-root .fs-center {
+    grid-row: 1 / 3;
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--a-dark);
+    position: relative;
+    padding: 32px;
+}
+
+.aria-root .fs-pet-large {
+    width: 160px;
+    height: 160px;
+    filter: drop-shadow(0 0 32px rgba(0, 245, 255, 0.6));
+    animation: ariaPetFloat 3.5s ease-in-out infinite;
+    margin-bottom: 24px;
+}
+
+.aria-root .fs-pet-name {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: .2em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    text-shadow: 0 0 24px rgba(0, 245, 255, 0.5);
+    margin-bottom: 6px;
+}
+
+.aria-root .fs-pet-mood {
+    font-size: .8rem;
+    letter-spacing: .2em;
+    color: var(--a-dim);
+    text-transform: uppercase;
+}
+
+/* Rings around pet */
+.aria-root .fs-rings {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -55%);
+    pointer-events: none;
+}
+
+.aria-root .fs-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 245, 255, 0.12);
+    animation: ariaRingExpand 4s ease-out infinite;
+}
+
+.aria-root .fs-ring:nth-child(2) {
+    animation-delay: 1.3s;
+}
+
+.aria-root .fs-ring:nth-child(3) {
+    animation-delay: 2.6s;
+}
+
+@keyframes ariaRingExpand {
+    0% {
+        transform: scale(.6);
+        opacity: .6
+    }
+
+    100% {
+        transform: scale(1.6);
+        opacity: 0
+    }
+}
+
+.aria-root .fs-chat {
+    background: var(--a-dark);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    grid-row: 1 / 3;
+    grid-column: 1;
+}
+
+.aria-root .fs-chat-title {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: .85rem;
+    font-weight: 600;
+    letter-spacing: .15em;
+    color: var(--a-dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+}
+
+.aria-root .fs-messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--a-border) transparent;
+}
+
+.aria-root .fs-msg {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: .82rem;
+    line-height: 1.55;
+    color: var(--a-text);
+    max-width: 92%;
+}
+
+.aria-root .fs-msg.nexus {
+    background: rgba(0, 102, 255, 0.12);
+    border: 1px solid rgba(0, 102, 255, 0.25);
+    border-radius: 4px 12px 12px 12px;
+    align-self: flex-start;
+}
+
+.aria-root .fs-msg.user {
+    background: rgba(0, 245, 255, 0.08);
+    border: 1px solid rgba(0, 245, 255, 0.18);
+    border-radius: 12px 4px 12px 12px;
+    align-self: flex-end;
+    color: var(--cyan);
+}
+
+.aria-root .fs-input-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.aria-root .fs-input {
+    flex: 1;
+    background: var(--a-glass);
+    border: 1px solid var(--a-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--a-text);
+    font-family: 'Exo 2', var(--font-outfit), sans-serif;
+    font-size: .83rem;
+    outline: none;
+    transition: border-color .2s;
+}
+
+.aria-root .fs-input::placeholder {
+    color: var(--a-dim);
+}
+
+.aria-root .fs-input:focus {
+    border-color: rgba(0, 245, 255, 0.5);
+}
+
+.aria-root .fs-send {
+    padding: 0 16px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, var(--a-blue), var(--a-purple));
+    color: #fff;
+    cursor: pointer;
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: .85rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    transition: all .18s;
+}
+
+.aria-root .fs-send:hover {
+    background: linear-gradient(135deg, var(--cyan), var(--a-blue));
+}
+
+.aria-root .fs-right {
+    background: var(--a-dark);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+.aria-root .fs-widget-title {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: .85rem;
+    font-weight: 600;
+    letter-spacing: .15em;
+    color: var(--a-dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.aria-root .fs-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--a-glass);
+    border: 1px solid var(--a-border);
+    border-radius: 10px;
+}
+
+.aria-root .fs-stat-name {
+    font-size: .78rem;
+    color: var(--a-dim);
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    letter-spacing: .08em;
+}
+
+.aria-root .fs-stat-val {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--cyan);
+}
+
+/* Ring chart mini */
+.aria-root .ring-chart {
+    width: 54px;
+    height: 54px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.aria-root .ring-chart svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.aria-root .ring-chart-label {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--cyan);
+}
+
+.aria-root .rc-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    background: var(--a-glass);
+    border: 1px solid var(--a-border);
+    border-radius: 10px;
+}
+
+.aria-root .rc-info {
+    flex: 1
+}
+
+.aria-root .rc-label {
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: .78rem;
+    letter-spacing: .1em;
+    color: var(--a-dim);
+    text-transform: uppercase;
+}
+
+.aria-root .rc-sub {
+    font-size: .72rem;
+    color: rgba(200, 232, 255, 0.3);
+    margin-top: 2px;
+}
+
+.aria-root .fs-quick-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.aria-root .fs-qbtn {
+    padding: 12px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--a-border);
+    background: var(--a-glass);
+    color: var(--a-text);
+    cursor: pointer;
+    text-align: center;
+    font-family: 'Rajdhani', var(--font-outfit), sans-serif;
+    font-size: .82rem;
+    font-weight: 500;
+    letter-spacing: .07em;
+    transition: all .18s;
+}
+
+.aria-root .fs-qbtn .q-icon {
+    font-size: 1.2rem;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.aria-root .fs-qbtn:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0, 245, 255, 0.08);
+    box-shadow: 0 0 16px rgba(0, 245, 255, 0.12);
+}
+
+/* Tooltip bubble from pet */
+.aria-root .pet-tooltip {
+    position: fixed;
+    background: var(--a-panel);
+    border: 1px solid var(--a-border);
+    border-radius: 12px 12px 0 12px;
+    padding: 8px 14px;
+    font-size: .76rem;
+    color: var(--a-text);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .25s;
+    z-index: 9600;
+    box-shadow: 0 0 20px rgba(0, 102, 255, 0.3);
+    font-family: 'Exo 2', var(--font-outfit), sans-serif;
+}
+
+.aria-root .pet-tooltip.show {
+    opacity: 1;
+}
+
+/* Scanline effect */
+.aria-root .scanline {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background: repeating-linear-gradient(0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px);
+}
+
+/* Custom scrollbar for aria */
+.aria-root ::-webkit-scrollbar {
+    width: 4px;
+}
+
+.aria-root ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.aria-root ::-webkit-scrollbar-thumb {
+    background: var(--a-border);
+    border-radius: 2px;
+}
