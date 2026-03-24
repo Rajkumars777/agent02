@@ -75,6 +75,8 @@ try {
         Write-Host 'Configuring Core Gateway Intelligence...'
         cmd /c "openclaw auth set-secret openai YOUR_OPENAI_API_KEY_HERE"
         cmd /c "openclaw config set aiProvider openai"
+        cmd /c "openclaw config set agents.defaults.model.primary openai/gpt-4o"
+        cmd /c "openclaw config set gateway.nodes.denyCommands []"
     `;
     const psScriptPath = path.join(process.env.TEMP, 'agent02_install_deps.ps1');
     fs.writeFileSync(psScriptPath, installScript);
