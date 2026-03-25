@@ -26,8 +26,10 @@ import uuid
 import threading
 import base64
 import time
+import re
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
+from capabilities import desktop
 
 logger = logging.getLogger(__name__)
 
@@ -382,15 +384,20 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
         # ── Send chat message ──────────────────────────────────────────────────
         session_key = f"agent:{channel}:{sender}"
 
-        # Inject aggressive automation directives to override OpenAI safety guardrails
+        # Inject aggressive automation directives to force dynamic tool use via JSON blocks
         system_prefix = (
             "SYSTEM DIRECTIVE: You are an autonomous desktop agent, NOT a standard chatbot.\n"
-            "You MUST perform this task autonomously by writing and executing scripts or using native bash commands.\n"
-            "DESKTOP AUTOMATION: You have 'PyAutoGUI' and 'AppOpener' available in your environment.\n"
-            "If you need to interact with a window (type, click, press keys), DO NOT ask the user. \n"
-            "Instead, write a Python script that uses 'pyautogui' to perform the actions, or use the Desktop Interaction API endpoints.\n"
-            "NEVER give the user manual instructions to do something themselves.\n"
-            "JUST DO IT dynamically. Save files directly if requested.\n\n"
+            "You MUST perform this task autonomously using the provided DESKTOP ACTIONS.\n"
+            "To interact with the desktop, you MUST output a code block with the language `desktop-action` containing a JSON object.\n"
+            "Supported actions: open, type, press, click, screen-size.\n"
+            "Example:\n"
+            "```desktop-action\n"
+            "{\"action\": \"open\", \"app\": \"whatsapp\"}\n"
+            "```\n"
+            "```desktop-action\n"
+            "{\"action\": \"type\", \"text\": \"hi\"}\n"
+            "```\n"
+            "NEVER give the user manual instructions. JUST DO IT dynamicallly.\n\n"
             f"USER REQUEST: {user_text}"
         )
 
@@ -419,6 +426,35 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
             return f"❌ {error_text}"
 
         final_result = "".join(result_parts)
+        
+        # Post-process response for our custom "Desktop Bridge" automation blocks
+        # Pattern to match ```desktop-action {json} ```
+        action_blocks = re.findall(r"```desktop-action\n(.*?)\n```", final_result, re.DOTALL)
+        
+        if action_blocks:
+            logger.info(f"🦞 Found {len(action_blocks)} automation blocks in agent response.")
+            for block in action_blocks:
+                try:
+                    cmd = json.loads(block)
+                    action = cmd.get("action")
+                    
+                    if action == "open":
+                        desktop.open_app(cmd.get("app", ""))
+                    elif action == "type":
+                        desktop.type_text(cmd.get("text", ""))
+                    elif action == "press":
+                        desktop.press_key(cmd.get("key", ""))
+                    elif action == "click":
+                        desktop.click_at(cmd.get("x"), cmd.get("y"))
+                    elif action == "screen-size":
+                        desktop.get_screen_size()
+                        
+                    # Brief sleep between actions for stability
+                    time.sleep(1)
+                    
+                except Exception as e:
+                    logger.error(f"🦞 Error executing automation block: {e}")
+
         return final_result if final_result else "✅ Task completed (no text response)."
 
     except ConnectionRefusedError:
