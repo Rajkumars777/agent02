@@ -36,12 +36,16 @@ Write-Host "Running PyInstaller..." -ForegroundColor Yellow
     --specpath "$env:TEMP\PyInstaller_spec" `
     --add-data "$backendDir\api;api" `
     --add-data "$backendDir\core;core" `
+    --add-data "$backendDir\capabilities;capabilities" `
     --collect-all "openai" `
     --collect-all "httpx" `
     --collect-all "httpcore" `
     --collect-all "websocket" `
     --collect-all "yfinance" `
     --collect-all "cryptography" `
+    --collect-all "pyautogui" `
+    --collect-all "psutil" `
+    --collect-all "appopener" `
     (Join-Path $backendDir "main.py")
 
 if ($LASTEXITCODE -ne 0) {

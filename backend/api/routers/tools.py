@@ -60,6 +60,36 @@ async def close_desktop_app(req: DesktopAppRequest):
     from capabilities.desktop import close_app
     return close_app(req.app_name)
 
+class DesktopTypeRequest(BaseModel):
+    text: str
+
+@router.post("/desktop/type")
+async def desktop_type(req: DesktopTypeRequest):
+    from capabilities.desktop import type_text
+    return type_text(req.text)
+
+class DesktopPressRequest(BaseModel):
+    key: str
+
+@router.post("/desktop/press")
+async def desktop_press(req: DesktopPressRequest):
+    from capabilities.desktop import press_key
+    return press_key(req.key)
+
+class DesktopClickRequest(BaseModel):
+    x: int
+    y: int
+
+@router.post("/desktop/click")
+async def desktop_click(req: DesktopClickRequest):
+    from capabilities.desktop import click_at
+    return click_at(req.x, req.y)
+
+@router.get("/desktop/screen-size")
+async def desktop_screen_size():
+    from capabilities.desktop import get_screen_size
+    return get_screen_size()
+
 class OpenPathRequest(BaseModel):
     path: str
 
