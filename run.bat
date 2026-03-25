@@ -1,19 +1,8 @@
 @echo off
-title OpenClaw Agent Launcher
-echo ===================================================
-echo     Starting OpenClaw Agent and UI...
-echo ===================================================
-echo.
-
-echo [1/2] Starting OpenClaw Gateway Service in a new window...
-start "OpenClaw Gateway" cmd /k "openclaw gateway run"
-
-echo Waiting for OpenClaw to initialize...
-timeout /t 5 /nobreak >nul
-
-echo [2/2] Starting Next.js UI...
-echo Please open http://localhost:3000 in your browser if it doesn't open automatically.
-echo.
-npm run dev
-
-pause
+set "SCRIPT_DIR=%~dp0"
+if not exist "%SCRIPT_DIR%start.vbs" (
+    echo Set WshShell = CreateObject("WScript.Shell"^) > "%SCRIPT_DIR%start.vbs"
+    echo WshShell.CurrentDirectory = CreateObject("Scripting.FileSystemObject"^).GetParentFolderName(WScript.ScriptFullName^) >> "%SCRIPT_DIR%start.vbs"
+    echo WshShell.Run "cmd /c npx.cmd electron .", 0, False >> "%SCRIPT_DIR%start.vbs"
+)
+wscript.exe "%SCRIPT_DIR%start.vbs"

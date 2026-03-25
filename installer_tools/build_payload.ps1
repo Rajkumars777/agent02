@@ -10,27 +10,25 @@ New-Item -ItemType Directory -Force -Path "$tempDir\backend" | Out-Null
 New-Item -ItemType Directory -Force -Path "$tempDir\src" | Out-Null
 New-Item -ItemType Directory -Force -Path "$tempDir\public" | Out-Null
 
-# Copy primary files
-Copy-Item "$sourceDir\package.json" "$tempDir"
-Copy-Item "$sourceDir\tailwind.config.ts" "$tempDir"
-Copy-Item "$sourceDir\tsconfig.json" "$tempDir"
-Copy-Item "$sourceDir\postcss.config.mjs" "$tempDir"
-Copy-Item "$sourceDir\next.config.mjs" "$tempDir"
-Copy-Item "$sourceDir\components.json" "$tempDir"
-Copy-Item "$sourceDir\launcher.js" "$tempDir"
-Copy-Item "$sourceDir\run.bat" "$tempDir"
+# 1. Ensure the app is built
+# (Uncomment if you want to force rebuild every time)
+# & "$PSScriptRoot\build_all.ps1"
+
+# 2. Copy compiled Electron app (win-unpacked)
+$compiledAppDir = Join-Path $sourceDir "dist\win-unpacked"
+if (-Not (Test-Path $compiledAppDir)) {
+    Write-Error "Compiled app not found at $compiledAppDir. Please run build_all.ps1 first."
+    exit 1
+}
+
+Write-Host "Copying compiled app to payload temp..."
+Copy-Item "$compiledAppDir\*" $tempDir -Recurse
+
+# 3. Add any extra root files if needed
 Copy-Item "$sourceDir\.env.local" "$tempDir"
 
-# Copy directories recursively
-Copy-Item "$sourceDir\src\*" "$tempDir\src" -Recurse
-Copy-Item "$sourceDir\public\*" "$tempDir\public" -Recurse
-
-# Copy Backend avoiding venv and cache
-Copy-Item "$sourceDir\backend\*" "$tempDir\backend" -Recurse -Exclude "*__pycache__*", "*venv*"
-Copy-Item "$sourceDir\backend\.env" "$tempDir\backend"
-
 Write-Host "Zipping payload..."
-Compress-Archive -Path "$tempDir\*" -DestinationPath $payloadFile
+Compress-Archive -Path "$tempDir\*" -DestinationPath $payloadFile -Force
 Write-Host "Created payload.zip successfully."
 
 Remove-Item -Recurse -Force $tempDir

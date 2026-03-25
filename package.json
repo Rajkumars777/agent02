@@ -1,17 +1,69 @@
 {
-  "name": "openclaw-ui",
+  "name": "agent02",
   "version": "1.0.0",
   "private": true,
+  "main": "electron_main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "electron:dev": "npx electron .",
+    "dist": "powershell -ExecutionPolicy Bypass -File installer_tools/build_all.ps1"
+  },
+  "build": {
+    "appId": "com.agent02.app",
+    "productName": "Agent02",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "buildResources": "build_resources",
+      "output": "dist"
+    },
+    "files": [
+      "electron_main.js",
+      "out/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend.exe",
+        "to": "backend.exe"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build_resources/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Agent02"
+    }
   },
   "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.11",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.0.1",
     "next": "15.2.4",
+    "radix-ui": "^1.4.3",
     "react": "^18",
     "react-dom": "^18",
     "react-markdown": "^9.0.1",
@@ -24,6 +76,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "electron": "^41.0.3",
+    "electron-builder": "^25.1.8",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

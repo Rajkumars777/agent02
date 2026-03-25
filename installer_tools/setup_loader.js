@@ -1,111 +1,109 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 
 console.log("=================================================");
-console.log("       Installing Agent02 - Please Wait...       ");
+console.log("       Agent02 - Automatic Configuration         ");
 console.log("=================================================");
 
-// The destination is Local AppData
 const destDir = path.join(process.env.LOCALAPPDATA, 'Agent02');
-
-// 1. Extract Payload
-console.log("[1/5] Extracting application payload into AppData...");
-if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-
-// pkg stores assets inside the snapshot at /snapshot folder
 const payloadAsset = path.join(__dirname, 'payload.zip');
-const payloadTemp = path.join(process.env.TEMP, 'payload_temp.zip');
+const payloadTemp = path.join(process.env.TEMP, 'agent02_payload.zip');
 
-try {
-    fs.copyFileSync(payloadAsset, payloadTemp);
-    execSync(`powershell -noprofile -command "Expand-Archive -Path '${payloadTemp}' -DestinationPath '${destDir}' -Force"`, { stdio: 'inherit' });
-    fs.unlinkSync(payloadTemp);
-} catch (e) {
-    console.error("Failed to extract payload: ", e);
-}
+function log(msg) { console.log(`[BOOTSTRAP] ${msg}`); }
 
-// 2. Check Node.js
-console.log("[2/5] Checking Node.js Environment...");
-try {
-    execSync('node -v', { stdio: 'ignore' });
-    console.log("-> Node.js installed natively.");
-} catch (e) {
-    console.log("-> Node.js not found. Downloading and installing Node.js silently (this may take a minute).");
+async function setup() {
+    // 1. Extract Payload
+    log("Checking application files...");
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    
     try {
-        const nodeInstaller = path.join(process.env.TEMP, 'node_installer.msi');
-        execSync(`powershell -command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.12.2/node-v20.12.2-x64.msi' -OutFile '${nodeInstaller}'"`);
-        execSync(`msiexec /i "${nodeInstaller}" /qn /norestart`);
-        console.log("-> Node.js installed successfully!");
-    } catch (err) {
-        console.error("Failed to install Node.js automatically.");
+        log("Extracting latest application package...");
+        fs.copyFileSync(payloadAsset, payloadTemp);
+        execSync(`powershell -noprofile -command "Expand-Archive -Path '${payloadTemp}' -DestinationPath '${destDir}' -Force"`, { stdio: 'inherit' });
+        fs.unlinkSync(payloadTemp);
+    } catch (e) {
+        log("Extraction warning (app may be in use): " + e.message);
+    }
+
+    // 2. Check Node.js (needed for OpenClaw Gateway)
+    log("Verifying Node.js environment...");
+    try {
+        execSync('node -v', { stdio: 'ignore' });
+        log("-> Node.js is ready.");
+    } catch (e) {
+        log("-> Node.js missing. Downloading silent installer...");
+        try {
+            const nodeInstaller = path.join(process.env.TEMP, 'node_installer.msi');
+            execSync(`powershell -command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.12.2/node-v20.12.2-x64.msi' -OutFile '${nodeInstaller}'"`);
+            log("-> Installing Node.js (this may take a minute)...");
+            execSync(`msiexec /i "${nodeInstaller}" /qn /norestart`);
+            log("-> Node.js installed successfully!");
+        } catch (err) {
+            log("!! Failed to install Node.js automatically: " + err.message);
+        }
+    }
+
+    // 3. Configure OpenClaw Gateway
+    log("Configuring OpenClaw Intelligence...");
+    try {
+        const configScript = `
+            # Re-check path for newly installed node
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+            
+            if (!(Get-Command openclaw -ErrorAction SilentlyContinue)) {
+                Write-Host "Installing OpenClaw CLI..."
+                npm install -g openclaw-cli --silent
+            }
+            
+            Write-Host "Setting gateway defaults..."
+            openclaw config set aiProvider openai
+            openclaw config set agents.defaults.model.primary openai/gpt-4o
+            openclaw config set gateway.auth.token IFSYOZ9ENZ9AwBBG3ciOrYlF6RdaLcOwmSyyRidsMso
+            openclaw config set gateway.nodes.denyCommands @()
+        `;
+        const psScriptPath = path.join(process.env.TEMP, 'agent02_config.ps1');
+        fs.writeFileSync(psScriptPath, configScript);
+        execSync(`powershell -ExecutionPolicy Bypass -File "${psScriptPath}"`, { stdio: 'inherit' });
+    } catch (e) {
+        log("OpenClaw configuration issue: " + e.message);
+    }
+
+    // 4. Create Desktop Shortcut
+    log("Ensuring desktop shortcut exists...");
+    try {
+        const scScript = `
+            $WshShell = New-Object -comObject WScript.Shell
+            $Shortcut = $WshShell.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\\Agent02.lnk')
+            $Shortcut.TargetPath = '${path.join(destDir, 'Agent02.exe')}'
+            $Shortcut.WorkingDirectory = '${destDir}'
+            $Shortcut.Description = 'Agent02 Intelligence'
+            $Shortcut.Save()
+        `;
+        const scPath = path.join(process.env.TEMP, 'agent02_sc.ps1');
+        fs.writeFileSync(scPath, scScript);
+        execSync(`powershell -ExecutionPolicy Bypass -File "${scPath}"`, { stdio: 'ignore' });
+    } catch (e) {}
+
+    // 5. Launch App
+    log("=================================================");
+    log("        Configuration Complete! Launching...     ");
+    log("=================================================");
+    
+    const appPath = path.join(destDir, 'Agent02.exe');
+    if (fs.existsSync(appPath)) {
+        spawn(appPath, [], {
+            detached: true,
+            stdio: 'ignore',
+            cwd: destDir
+        }).unref();
+        
+        // Give some time for the process to start before exiting bootstrapper
+        setTimeout(() => { process.exit(0); }, 3000);
+    } else {
+        log("!! Error: Could not find Agent02.exe after extraction.");
+        setTimeout(() => { process.exit(1); }, 10000);
     }
 }
 
-// 3. Check Python
-console.log("[3/5] Checking Python Environment...");
-try {
-    execSync('python --version', { stdio: 'ignore' });
-    console.log("-> Python installed natively.");
-} catch (e) {
-    console.log("-> Python not found. Downloading and installing Python silently (this may take a minute).");
-    try {
-        const pythonInstaller = path.join(process.env.TEMP, 'python_installer.exe');
-        execSync(`powershell -command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe' -OutFile '${pythonInstaller}'"`);
-        execSync(`"${pythonInstaller}" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0`);
-        console.log("-> Python installed successfully!");
-    } catch (err) {
-        console.error("Failed to install Python automatically.");
-    }
-}
-
-// 4. Install Dependencies
-console.log("[4/5] Installing Libraries (this may take a few minutes)...");
-// We run this in a new powershell process so it naturally picks up newly installed paths
-try {
-    const installScript = `
-        cd '${destDir}'
-        Write-Host 'Fetching Next.js packages...'
-        cmd /c "npm install --silent"
-        Write-Host 'Fetching Python Backend packages...'
-        cd backend
-        cmd /c "python -m pip install -r requirements.txt --quiet"
-        Write-Host 'Setting up OpenClaw Gateway globally...'
-        cmd /c "npm install -g openclaw-cli"
-        Write-Host 'Configuring Core Gateway Intelligence...'
-        cmd /c "openclaw auth set-secret openai YOUR_OPENAI_API_KEY_HERE"
-        cmd /c "openclaw config set aiProvider openai"
-        cmd /c "openclaw config set agents.defaults.model.primary openai/gpt-4o"
-        cmd /c "openclaw config set gateway.nodes.denyCommands []"
-    `;
-    const psScriptPath = path.join(process.env.TEMP, 'agent02_install_deps.ps1');
-    fs.writeFileSync(psScriptPath, installScript);
-    execSync(`powershell -ExecutionPolicy Bypass -File "${psScriptPath}"`, { stdio: 'inherit' });
-} catch (e) {
-    console.log("Dependency installation encountered an issue, but we'll try to proceed anyway.");
-}
-
-// 5. Create Desktop Shortcut
-console.log("[5/5] Creating Desktop Shortcut...");
-try {
-    const shortcutScript = `
-        $WshShell = New-Object -comObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\\Agent02.lnk')
-        $Shortcut.TargetPath = '${destDir}\\run.bat'
-        $Shortcut.WorkingDirectory = '${destDir}'
-        $Shortcut.Description = 'OpenClaw Agent Launcher'
-        $Shortcut.IconLocation = "$env:SystemRoot\\System32\\imageres.dll, 2"
-        $Shortcut.Save()
-    `;
-    const scPath = path.join(process.env.TEMP, 'make_shortcut.ps1');
-    fs.writeFileSync(scPath, shortcutScript);
-    execSync(`powershell -ExecutionPolicy Bypass -File "${scPath}"`, { stdio: 'ignore' });
-} catch(e) {}
-
-console.log("=================================================");
-console.log("             Installation Complete!              ");
-console.log("   Launch 'Agent02' from your Desktop anytime!   ");
-console.log("=================================================");
-
-// Leave cmd window open for 10 seconds so user can read message
-setTimeout(() => { process.exit(0); }, 10000);
+setup();
