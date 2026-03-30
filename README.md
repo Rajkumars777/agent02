@@ -1,79 +1,169 @@
-# Agent02 ── Autonomous OpenClaw Gateway Interface
+# NEXUS — Agent02
 
-Agent02 is a self-hosted, triple-stack Desktop AI Assistant powered purely by the **[OpenClaw Gateway](https://openclaw.ai)**. It bypasses restrictive cloud sandboxes to provide true, unfettered autonomous desktop integration. It natively commands your local system—executing terminal commands, generating complex Microsoft Office files, searching the web, and organizing directories purely through natural language.
-
-<br/>
-
-## 🧊 Triple-Stack Architecture
-The Agent02 system simultaneously coordinates three highly distinct functional engines on your local machine with zero human intervention.
-
-1. **Next.js Real-time Dashboard (Port 3000):** A deeply modern UI featuring streaming Server-Sent Events (SSE), dynamic thought-visualization, and dark-glass aesthetics.
-2. **FastAPI Python Orchestrator (Port 8000):** A highly concurrent ASGI backend that bridges communication between the UI and OpenClaw. 
-3. **OpenClaw Executable Engine (Port 18789):** The true brain of the system. This lightweight local gateway hooks directly into your filesystem, executing local processes via natural language securely through a localized API model.
-
-![Architecture Flow](https://via.placeholder.com/800x200.png?text=Next.js+UI+%E2%86%92+FastAPI+Orchestrator+%E2%86%92+OpenClaw+Gateway)
+> An autonomous AI agent powered by **OpenClaw Gateway** with a Next.js dashboard, FastAPI backend, and full local desktop integration.
 
 ---
 
-## ⚡ Zero-Touch Deployment
+## ⚡ Quick Start (New Users)
 
-Agent02 is designed to be universally frictionless. We have engineered a single portable executable that automatically sets up the entire application perfectly.
-
-### Installation via `Agent02_Setup.exe`
-1. Move **`Agent02_Setup.exe`** to any Windows machine.
-2. **Double-click it.**
-3. The setup script will immediately:
-   - Silently download and install identical **Python** and **Node.js** versions globally to perfectly align the runtime.
-   - Inject the official project codebase automatically.
-   - Programmatically inject the core configuration strings into the global authentication vault.
-   - Spin up standard native compilers (`pip` & `npm`) in the background.
-4. **Launch Agent02.** You will see a shortcut directly on your desktop.
-
-### Standard Launching
-Open **`Agent.exe`** from your desktop or root folder. The bootstrapper instantly spawns:
-- The OpenClaw Gateway Daemon
-- Uvicorn Python Servers 
-- The Next.js UI Stream  
-
-All in a single, perfectly timed terminal boot sequence. Open your browser to `http://localhost:3000` to interact with your Agent.
-
----
-
-## ⚙️ How it Works under the Hood
-
-Agent02 does not rely on static hardcoded capabilities like `create_word_document.py` or `search_web.js`. It delegates **100%** of logical planning and execution strictly to the OpenClaw Gateway via `asyncio`.
-
-```yaml
-# Execution Pipeline
-User Prompt → Next.js API (/api/chat)
-            → FastAPI Engine (main.py)
-            → OpenClaw Gateway Engine (localhost:18789)
-            ← Dynamic Tool Execution & System Output streamed back!
+### Step 1 — Clone the project
+```
+git clone <your-repo-url>
+cd Agent02
 ```
 
-Wait for OpenClaw to process your requests. The interface will give you live, streaming text of exactly what the agent is planning, executing, and finalizing. 
+### Step 2 — Run the setup wizard
+```
+python setup.py
+```
+
+The wizard will automatically:
+- ✅ Install Python backend dependencies (virtualenv)
+- ✅ Install Node.js frontend dependencies (`npm install`)
+- ✅ Download and install **OpenClaw** globally (`npm install -g openclaw`)
+- ✅ Configure OpenClaw with your AI API key (OpenAI / Google / OpenRouter)
+- ✅ Generate a secure gateway token and write all `.env` files
+
+### Step 3 — Start everything
+```
+start.bat
+```
+
+This opens **3 color-coded terminal windows** automatically:
+1. 🟦 OpenClaw Gateway (port 18789)
+2. 🟨 Python FastAPI Backend (port 8000)
+3. 🟣 Next.js Frontend (port 3000)
+
+Then opens **http://localhost:3000** in your browser.
+
+> **That's it.** You're running.
 
 ---
 
-## 🛠️ Modifying the Environment
+## 🏗️ Architecture
 
-If you would like to run the engines detached, or swap out the custom backend URL, reference `.env.local`:
-```env
-# Point to wherever OpenClaw is running locally
-OPENCLAW_URL=http://localhost:18789
-OPENCLAW_TOKEN=local
+```
+User (Browser)
+    │
+    ▼
+Next.js Dashboard  (localhost:3000)
+    │  REST + WebSocket
+    ▼
+FastAPI Backend    (localhost:8000)
+    │  HTTP
+    ▼
+OpenClaw Gateway   (localhost:18789)
+    │
+    ▼
+Local System — Files, Office, Browser, Terminal
 ```
 
-### Developing Locally
+---
+
+## 📋 Requirements
+
+| Tool | Version |
+|---|---|
+| Python | 3.9+ |
+| Node.js | 18+ |
+| npm | 8+ |
+| OpenClaw | Auto-installed by setup.py |
+| AI API Key | OpenAI / Google Gemini / OpenRouter |
+
+---
+
+## ⚙️ Manual Setup (Alternative)
+
+If you prefer to set up manually:
+
 ```bash
-# 1. Start the OpenClaw Gateway
-openclaw gateway start
+# 1. Install Python deps
+cd backend
+python -m venv venv
+venv\Scripts\pip install -r requirements.txt   # Windows
+# source venv/bin/activate && pip install -r requirements.txt  # Mac/Linux
 
-# 2. Start the Backend Proxy
-cd backend && python -m uvicorn main:app --port 8000
+# 2. Install Node.js deps
+cd ..
+npm install
 
-# 3. Start the UI Host
-npm run dev
+# 3. Install OpenClaw
+npm install -g openclaw
+
+# 4. Configure OpenClaw
+openclaw onboard
+
+# 5. Copy and fill .env files
+copy .env.example .env.local
+copy backend\.env.example backend\.env
+# Then fill in your API key in both files
+
+# 6. Start services (3 terminals)
+openclaw gateway run
+cd backend && venv\Scripts\python main.py   # Terminal 2
+npm run dev                                 # Terminal 3
 ```
 
-*Built specifically for true autonomous system delegation.*
+---
+
+## 🔑 Environment Variables
+
+### `.env.local` (frontend)
+```env
+OPENCLAW_URL=http://127.0.0.1:18789
+OPENCLAW_TOKEN=<your_gateway_token>
+```
+
+### `backend/.env` (backend)
+```env
+OPENAI_API_KEY=sk-...
+```
+
+### `backend/config.json` (AI routing)
+```json
+{
+  "ai_provider": "openclaw",
+  "ai_model": "gpt-4o-mini",
+  "openclaw_token": "<same_token>",
+  "openai_api_key": "sk-..."
+}
+```
+
+> All these are written automatically by `python setup.py`.
+
+---
+
+## 🎯 What NEXUS Can Do
+
+| Capability | Examples |
+|---|---|
+| 📊 Excel & Data | Generate spreadsheets, calculate averages, format cells |
+| 📄 Word Docs | Write multi-page reports, format headings |
+| 📑 PDF Tools | Create PDFs, split/merge documents |
+| 📽️ PowerPoint | Create presentations with charts |
+| 🌐 Web Search | Search Google, extract content |
+| 🗂️ File Manager | Organize folders, rename, move, delete |
+
+---
+
+## 🛠️ Development
+
+```bash
+# Frontend only (hot reload)
+npm run dev
+
+# Backend only
+cd backend
+venv\Scripts\python main.py
+
+# Gateway only
+openclaw gateway run
+```
+
+---
+
+## 🤝 Contributing
+
+1. Fork → Branch → PR
+2. Run `python setup.py` on your fork to get set up
+3. Test with `npm run dev` + `python backend/main.py`

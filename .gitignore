@@ -2,9 +2,12 @@ node_modules/
 .next/
 .env.local
 .env
+backend/.env
 backend/venv/
 backend/__pycache__/
+backend/backend.log
 dist/
+build/
 out/
 Agent02_Standalone/
 temp_payload/
@@ -13,3 +16,4 @@ temp_payload/
 *.log
 .DS_Store
 Thumbs.db
+bin/

@@ -2,52 +2,10 @@
   "name": "agent02",
   "version": "1.0.0",
   "private": true,
-  "main": "electron_main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "electron:dev": "npx electron .",
-    "dist": "powershell -ExecutionPolicy Bypass -File installer_tools/build_all.ps1"
-  },
-  "build": {
-    "appId": "com.agent02.app",
-    "productName": "Agent02",
-    "copyright": "Copyright © 2026",
-    "directories": {
-      "buildResources": "build_resources",
-      "output": "dist"
-    },
-    "files": [
-      "electron_main.js",
-      "out/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "backend.exe",
-        "to": "backend.exe"
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build_resources/icon.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Agent02"
-    }
+    "start": "next start"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -76,8 +34,6 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
-    "electron": "^41.0.3",
-    "electron-builder": "^25.1.8",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

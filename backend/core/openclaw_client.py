@@ -26,10 +26,9 @@ import uuid
 import threading
 import base64
 import time
-import re
+from typing import Optional, Callable
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
-from capabilities import desktop
 
 logger = logging.getLogger(__name__)
 
@@ -38,24 +37,37 @@ logger = logging.getLogger(__name__)
 
 def _get_openclaw_home() -> str:
     """
-    Return path to the .openclaw config/session directory.
-    Priority:
-      1. OPENCLAW_HOME environment variable
-      2. .openclaw/ next to the .exe (portable frozen build)
-      3. ~/.openclaw (system default fallback for persistence)
-    """
-    # 1. Explicit env override
-    if env_home := os.environ.get("OPENCLAW_HOME"):
-        return env_home
+    Return the path to the .openclaw config/session directory.
 
-    # 2. Next to the .exe
+    Handles two OPENCLAW_HOME conventions:
+      - Node.js style: OPENCLAW_HOME = parent of .openclaw  (e.g. C:\\Users\\rajak)
+      - Direct style:  OPENCLAW_HOME = the .openclaw dir itself
+
+    Priority:
+      1. OPENCLAW_HOME env var (auto-detects which convention)
+      2. .openclaw/ next to the .exe (portable frozen build)
+      3. ~/.openclaw (system default)
+    """
+    system_default = os.path.join(os.path.expanduser("~"), ".openclaw")
+
+    env_home = os.environ.get("OPENCLAW_HOME", "")
+    if env_home:
+        # Direct: OPENCLAW_HOME points straight to .openclaw dir
+        if os.path.exists(os.path.join(env_home, "openclaw.json")):
+            return env_home
+        # Node.js style: OPENCLAW_HOME is the parent — look for .openclaw subdir
+        candidate = os.path.join(env_home, ".openclaw")
+        if os.path.exists(os.path.join(candidate, "openclaw.json")):
+            return candidate
+        # env var set but config not found there; fall through to system default
+
+    # Next to the .exe (portable build)
     exe_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     project_home = os.path.join(exe_dir, ".openclaw")
     if os.path.exists(project_home):
         return project_home
 
-    # 3. System default (preferred for persistence)
-    return os.path.join(os.path.expanduser("~"), ".openclaw")
+    return system_default
 
 
 def _load_json_file(path: str) -> dict:
@@ -95,9 +107,9 @@ def get_device_identity() -> tuple[str, str, str, str]:
     )
 
     if device_id:
-        logger.info(f"🦞 Device identity loaded: deviceId={device_id[:12]}...")
+        logger.info(f"[OpenClaw] Device identity loaded: deviceId={device_id[:12]}...")
     else:
-        logger.warning("🦞 No device identity found in ~/.openclaw/identity/device.json")
+        logger.warning("[OpenClaw] No device identity found in ~/.openclaw/identity/device.json")
 
     return device_id, token, priv_pem, pub_pem
 
@@ -115,7 +127,7 @@ def get_gateway_config() -> tuple[int, str]:
 
 # ─── Main gateway client ──────────────────────────────────────────────────────
 
-def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main") -> str:
+def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main", on_delta: Optional[Callable[[str], None]] = None) -> str:
     """
     Forwards the user's UI input to the local OpenClaw Gateway via WebSocket RPC.
     Returns the agent's reply text.
@@ -134,7 +146,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
     device_id, operator_token, private_key_pem, public_key_pem = get_device_identity()
     ws_url            = f"ws://127.0.0.1:{port}"
 
-    logger.info(f"🦞 Connecting to OpenClaw: {ws_url}, device={str(device_id)[:12] if device_id else 'none'}...")
+    logger.info(f"[OpenClaw] Connecting to OpenClaw: {ws_url}, device={str(device_id)[:12] if device_id else 'none'}...")
 
     # ── Shared state ──────────────────────────────────────────────────────────
     result_parts = []
@@ -153,7 +165,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
         try:
             msg = json.loads(raw_msg)
         except json.JSONDecodeError:
-            logger.warning(f"🦞 Non-JSON message received: {raw_msg[:100]}")
+            logger.warning(f"[OpenClaw] Non-JSON message received: {raw_msg[:100]}")
             return
 
         msg_type = msg.get("type", "")
@@ -210,7 +222,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
                             pub_bytes = pub.public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw)
                             public_key_b64url = base64.urlsafe_b64encode(pub_bytes).decode('utf-8').rstrip('=')
                     except Exception as e:
-                        logger.error(f"🦞 Failed to sign handshake: {e}")
+                        logger.error(f"[OpenClaw] Failed to sign handshake: {e}")
 
                 connect_params: dict = {
                     "minProtocol": 3,
@@ -236,9 +248,9 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
                         "signedAt": signed_at_ms,
                         "nonce": nonce
                     }
-                    logger.info("🦞 Sending signed connection request")
+                    logger.info("[OpenClaw] Sending signed connection request")
                 else:
-                    logger.warning("🦞 Sending unsigned connection request (missing keys)")
+                    logger.warning("[OpenClaw] Sending unsigned connection request (missing keys)")
 
                 if auth_token:
                     connect_params["auth"] = {"token": auth_token}
@@ -255,7 +267,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
             if event_name == "connect.ready":
                 connected = True
                 connect_done.set()
-                logger.info("🦞 connect.ready received — authenticated successfully")
+                logger.info("[OpenClaw] connect.ready received — authenticated successfully")
                 return
 
             # Step 3: Chat response events
@@ -270,9 +282,13 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
                         if isinstance(content, list):
                             for block in content:
                                 if isinstance(block, dict) and block.get("type") == "text":
-                                    result_parts.append(block.get("text", ""))
+                                    txt = block.get("text", "")
+                                    result_parts.append(txt)
+                                    if on_delta: on_delta(txt)
                         elif isinstance(message.get("text"), str):
-                            result_parts.append(message["text"])
+                            txt = message["text"]
+                            result_parts.append(txt)
+                            if on_delta: on_delta(txt)
 
                 elif state == "final":
                     # Full final answer
@@ -313,29 +329,29 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
                 if not connected:
                     connected = True
                     connect_done.set()
-                    logger.info("🦞 Connect res ok=True — authenticated")
+                    logger.info("[OpenClaw] Connect res ok=True — authenticated")
             else:
                 err_msg    = err.get("message", "Unknown gateway error")
                 err_code   = err.get("code", "")
                 error_text = f"Gateway error: {err_msg}"
-                logger.error(f"🦞 Gateway RPC error [{err_code}]: {err_msg}")
+                logger.error(f"[OpenClaw] Gateway RPC error [{err_code}]: {err_msg}")
                 connect_done.set()
                 chat_done.set()
 
     def on_error(ws, error):
         nonlocal error_text
         error_text = f"WebSocket error: {str(error)}"
-        logger.error(f"🦞 {error_text}")
+        logger.error(f"[OpenClaw] {error_text}")
         connect_done.set()
         chat_done.set()
 
     def on_close(ws, close_status_code, close_msg):
-        logger.info(f"🦞 WebSocket closed: code={close_status_code}")
+        logger.info(f"[OpenClaw] WebSocket closed: code={close_status_code}")
         connect_done.set()
         chat_done.set()
 
     def on_open(ws):
-        logger.info("🦞 WebSocket opened — waiting for connect.challenge event")
+        logger.info("[OpenClaw] WebSocket opened — waiting for connect.challenge event")
 
     # ── Run WebSocket ──────────────────────────────────────────────────────────
     try:
@@ -384,20 +400,19 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
         # ── Send chat message ──────────────────────────────────────────────────
         session_key = f"agent:{channel}:{sender}"
 
-        # Inject aggressive automation directives to force dynamic tool use via JSON blocks
+        # Inject aggressive automation directives and UI policies
         system_prefix = (
-            "SYSTEM DIRECTIVE: You are an autonomous desktop agent, NOT a standard chatbot.\n"
-            "You MUST perform this task autonomously using the provided DESKTOP ACTIONS.\n"
-            "To interact with the desktop, you MUST output a code block with the language `desktop-action` containing a JSON object.\n"
-            "Supported actions: open, type, press, click, screen-size.\n"
-            "Example:\n"
-            "```desktop-action\n"
-            "{\"action\": \"open\", \"app\": \"whatsapp\"}\n"
-            "```\n"
-            "```desktop-action\n"
-            "{\"action\": \"type\", \"text\": \"hi\"}\n"
-            "```\n"
-            "NEVER give the user manual instructions. JUST DO IT dynamicallly.\n\n"
+            "SYSTEM DIRECTIVE: You are an autonomous desktop agent with terminal and file access.\n"
+            "1. You MUST perform tasks autonomously by writing and executing Python scripts.\n"
+            "2. ALWAYS write Python code to a temporary `.py` file, execute it, and then DELETE it.\n"
+            "3. DO NOT output your internal 'Steps:', plans, or thought processes in the chat reply. Just do the task and provide a concise, polished final response.\n"
+            "4. For informational queries (e.g. 'list files', 'check status', 'read file'), DO NOT save the answer to a `.txt` document, even if the output is extremely long. Print the complete list DIRECTLY in your chat response.\n"
+            "5. When listing files or directories, you MUST always output the FULL, ABSOLUTE Windows path (e.g., `C:\\Users\\...`) for EVERY single item. The UI automatically makes absolute paths clickable.\n"
+            "6. ONLY when the user explicitly asks you to generate, download, or create a specific file/report, store it in the user's `Downloads` directory by default.\n"
+            "7. If a task is unfinished, undone, or encounters an error, you MUST format that specific text using HTML for bold red (e.g., `<span style=\"color:#ef4444; font-weight:bold\">ERROR: your message</span>`).\n"
+            "8. Make your final response beautiful and premium using elegant markdown formatting and tables when useful.\n"
+            "9. If you need to manipulate Excel, Word, PPT or PDF files, first use the terminal to `pip install openpyxl python-docx python-pptx PyPDF2 pandas` before running your script.\n"
+            "10. NEVER give manual instructions or tutorials. Just DO IT dynamically.\n\n"
             f"USER REQUEST: {user_text}"
         )
 
@@ -413,7 +428,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
             },
         }
         ws.send(json.dumps(chat_req))
-        logger.info(f"🦞 chat.send → session={session_key}, msg={str(user_text)[:40] if user_text else ''}...")
+        logger.info(f"[OpenClaw] chat.send → session={session_key}, msg={str(user_text)[:40] if user_text else ''}...")
 
         # Wait for reply (up to 5 minutes for complex tasks)
         if not chat_done.wait(timeout=300):
@@ -426,42 +441,19 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
             return f"❌ {error_text}"
 
         final_result = "".join(result_parts)
-        
-        # Post-process response for our custom "Desktop Bridge" automation blocks
-        # Pattern to match ```desktop-action {json} ```
-        action_blocks = re.findall(r"```desktop-action\n(.*?)\n```", final_result, re.DOTALL)
-        
-        if action_blocks:
-            logger.info(f"🦞 Found {len(action_blocks)} automation blocks in agent response.")
-            for block in action_blocks:
-                try:
-                    cmd = json.loads(block)
-                    action = cmd.get("action")
-                    
-                    if action == "open":
-                        desktop.open_app(cmd.get("app", ""))
-                    elif action == "type":
-                        desktop.type_text(cmd.get("text", ""))
-                    elif action == "press":
-                        desktop.press_key(cmd.get("key", ""))
-                    elif action == "click":
-                        desktop.click_at(cmd.get("x"), cmd.get("y"))
-                    elif action == "screen-size":
-                        desktop.get_screen_size()
-                        
-                    # Brief sleep between actions for stability
-                    time.sleep(1)
-                    
-                except Exception as e:
-                    logger.error(f"🦞 Error executing automation block: {e}")
-
         return final_result if final_result else "✅ Task completed (no text response)."
 
     except ConnectionRefusedError:
         return (
-            f"❌ Cannot reach OpenClaw Gateway on port {port}.\n"
-            "Start it first via the control panel or run: openclaw gateway"
+            f"❌ Gateway is still initializing or cannot be reached on port {port}.\n"
+            "Please wait a few moments and try again."
         )
     except Exception as e:
-        logger.exception("🦞 Unexpected error in send_to_openclaw")
-        return f"❌ Error communicating with OpenClaw: {str(e)}"
+        err_str = str(e)
+        if "10061" in err_str or "actively refused" in err_str.lower():
+            return (
+                f"❌ Gateway is still initializing on port {port}.\n"
+                "Please wait 10-30 seconds and try again."
+            )
+        logger.exception("[OpenClaw] Unexpected error in send_to_openclaw")
+        return f"❌ Error communicating with OpenClaw: {err_str}"

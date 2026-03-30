@@ -27,51 +27,47 @@ else:
     _MEIPASS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # src/
     _EXE_DIR     = os.path.dirname(_MEIPASS_DIR)                                # project root
 
+# ── AppData Path (for persistent user-data) ───────────────────────────────────
+_APP_DIR = os.path.join(os.path.expanduser("~"), "AppData", "Local", "NEXUS")
+_NODE_DIR = os.path.join(_APP_DIR, "node")
+
 
 def _get_openclaw_home() -> str:
     """
-    Return path to the .openclaw config/session directory.
+    Return the path to the .openclaw config/session directory.
+
+    Handles two OPENCLAW_HOME conventions:
+      - Node.js style: OPENCLAW_HOME = parent of .openclaw  (e.g. C:\\Users\\rajak)
+      - Direct style:  OPENCLAW_HOME = the .openclaw dir itself
 
     Priority:
-      1. OPENCLAW_HOME environment variable  (CI / Docker override)
-      2. .openclaw/ next to the .exe         (portable frozen build)
-      3. .openclaw/ inside _MEIPASS          (bundled by spec file)
-      4. .openclaw/ at project root          (dev mode)
-      5. ~/.openclaw                          (system default fallback)
+      1. OPENCLAW_HOME env var (auto-detects which convention)
+      2. .openclaw/ next to the .exe  (portable frozen build)
+      3. ~/.openclaw                   (system default / installed build)
     """
-    # 1. Explicit env override
-    if env_home := os.environ.get("OPENCLAW_HOME"):
-        logger.info(f"OPENCLAW_HOME from env: {env_home}")
-        return env_home
+    system_home = os.path.join(os.path.expanduser("~"), ".openclaw")
 
-    # 2. Next to the .exe (portable frozen build)
+    env_home = os.environ.get("OPENCLAW_HOME", "")
+    if env_home:
+        # Direct: OPENCLAW_HOME points straight to .openclaw dir
+        if os.path.exists(os.path.join(env_home, "openclaw.json")):
+            logger.info(f"OPENCLAW_HOME (direct): {env_home}")
+            return env_home
+        # Node.js style: OPENCLAW_HOME is the parent — look for .openclaw subdir
+        candidate = os.path.join(env_home, ".openclaw")
+        if os.path.exists(os.path.join(candidate, "openclaw.json")):
+            logger.info(f"OPENCLAW_HOME (parent-style): {candidate}")
+            return candidate
+        # env set but config not there yet; fall through
+
+    # Next to the .exe (portable build)
     exe_home = os.path.join(_EXE_DIR, ".openclaw")
     if os.path.exists(exe_home):
         logger.info(f"Using .openclaw next to exe: {exe_home}")
         return exe_home
 
-    # 3. System default (preferred for installed frozen builds to ensure persistence)
-    system_home = os.path.join(os.path.expanduser("~"), ".openclaw")
-    if getattr(sys, 'frozen', False):
-        # In a bundle, we want persistence. Check system home first.
-        if os.path.exists(system_home) or not os.path.exists(os.path.join(_MEIPASS_DIR, ".openclaw")):
-             logger.info(f"Using system .openclaw for persistent bundle storage: {system_home}")
-             return system_home
-
-    # 4. Bundled inside _MEIPASS (frozen, spec file puts it here as a fallback)
-    meipass_home = os.path.join(_MEIPASS_DIR, ".openclaw")
-    if os.path.exists(meipass_home):
-        logger.info(f"Using bundled .openclaw in _MEIPASS: {meipass_home}")
-        return meipass_home
-
-    # 5. Project root — dev mode
-    project_home = os.path.join(_EXE_DIR, ".openclaw")
-    if os.path.exists(project_home):
-        logger.info(f"Using project-root .openclaw: {project_home}")
-        return project_home
-
-    # Default fallback
-    logger.info(f"Falling back to system .openclaw: {system_home}")
+    # System default — preferred for installed / persistent builds
+    logger.info(f"Using system .openclaw: {system_home}")
     return system_home
 
 
@@ -88,6 +84,9 @@ def _get_node_executable() -> str:
     ext = ".exe" if os.name == "nt" else ""
 
     candidates = [
+        os.path.join(_NODE_DIR,    f"node{ext}"),      # AppData install (Primary)
+        os.path.join(_EXE_DIR,     "bin", "node", f"node{ext}"),
+        os.path.join(_MEIPASS_DIR, "bin", "node", f"node{ext}"),
         os.path.join(_EXE_DIR,     "bin", f"node{ext}"),
         os.path.join(_MEIPASS_DIR, "bin", f"node{ext}"),
         os.path.join(_EXE_DIR,     f"node{ext}"),
@@ -114,6 +113,9 @@ def _get_openclaw_script() -> str:
       4. frontend/node_modules/openclaw/openclaw.mjs         (dev alternate)
     """
     candidates = [
+        # AppData install
+        os.path.join(_NODE_DIR, "openclaw.mjs"),
+        os.path.join(_NODE_DIR, "node_modules", "openclaw", "openclaw.mjs"),
         # Frozen (spec: destination='openclaw')
         os.path.join(_MEIPASS_DIR, "openclaw", "openclaw.mjs"),
         # Next to .exe
@@ -146,6 +148,14 @@ def _resolve_openclaw_command() -> list[str]:
     """
     node_exe    = _get_node_executable()
     script_path = _get_openclaw_script()
+
+    # 0. Inject bundled node into PATH so npx and openclaw child processes work natively
+    if os.path.exists(node_exe) and "node" in node_exe.lower():
+        node_dir = os.path.dirname(node_exe)
+        if node_dir not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = node_dir + os.pathsep + os.environ.get("PATH", "")
+            logger.info(f"Injected bundled Node.js into PATH: {node_dir}")
+
 
     # 1. Bundled node + bundled script (best — no external dependencies)
     if os.path.exists(node_exe) and os.path.exists(script_path):
@@ -256,10 +266,21 @@ def start_gateway(port: int | None = None) -> dict:
 
     # Already alive (external process or ours)
     if _is_gateway_alive(_gateway_port):
-        _status = "running"
-        msg = f"Gateway already running on port {_gateway_port}"
-        _gateway_log.append(f"[NEXUS] {msg}")
-        return {"success": True, "message": msg, "status": "running", "port": _gateway_port}
+        # 🔗 [NEXUS-34] Check for token mismatch if already running
+        try:
+            current_token = config.get("gateway", {}).get("auth", {}).get("token")
+            # Probe health/status to verify running token (if possible)
+            # For now, we force-restart if the config token doesn't match our state
+            if _status == "running" and _gateway_port == port:
+                 logger.info(f"Gateway already running on port {_gateway_port}")
+                 return {"success": True, "message": f"Gateway already running on port {_gateway_port}", "status": "running", "port": _gateway_port}
+            
+            # If we gets here, we might have a stale process with a different token
+            logger.warning(f"Gateway on port {_gateway_port} might be stale. Force restarting...")
+            stop_gateway()
+            time.sleep(2)
+        except Exception as e:
+            logger.error(f"Error checking gateway token: {e}")
 
     # Our process still alive
     if _process and _process.poll() is None:
@@ -292,10 +313,17 @@ def start_gateway(port: int | None = None) -> dict:
     logger.info(f"[OpenClaw] Home    : {openclaw_home}")
     _gateway_log.append(f"[NEXUS] Starting: {' '.join(cmd)}")
 
-    env                  = os.environ.copy()
-    env["OPENCLAW_HOME"] = openclaw_home
-    env["HOME"]          = os.path.dirname(openclaw_home)
-    env["USERPROFILE"]   = os.path.dirname(openclaw_home)
+    env = os.environ.copy()
+    # Node.js OpenClaw expects OPENCLAW_HOME = PARENT of the .openclaw folder
+    # (it appends /.openclaw/ itself). Ensure we always send the parent.
+    openclaw_parent = (
+        openclaw_home
+        if not openclaw_home.rstrip("/\\").endswith(".openclaw")
+        else os.path.dirname(openclaw_home)
+    )
+    env["OPENCLAW_HOME"] = openclaw_parent
+    env["HOME"]          = openclaw_parent
+    env["USERPROFILE"]   = openclaw_parent
 
     creation_flags = 0
     if os.name == "nt":

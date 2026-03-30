@@ -227,6 +227,10 @@ export function RecentsHistory({ recents, onSelect, onEdit, folders, onFoldersCh
                             className="group relative flex items-center p-2 rounded-xl hover:bg-secondary/50 transition-all duration-300 cursor-pointer border border-transparent hover:border-border/40"
                             onClick={() => onSelect(cmd)}
                         >
+                            {/* Index badge */}
+                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-secondary border border-border/50 text-[9px] font-black text-muted-foreground flex items-center justify-center mr-2 group-hover:border-primary/30 group-hover:text-primary transition-colors">
+                                {i + 1}
+                            </span>
                             <span className="text-xs text-foreground truncate font-normal flex-1 pr-6 tracking-tight">
                                 {cmd}
                             </span>

@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, UploadFile, File
 from pydantic import BaseModel
 import os
+import tempfile
 from typing import List, Optional
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools"])
 
 class BrowseRequest(BaseModel):
@@ -105,3 +108,42 @@ class DeletePathRequest(BaseModel):
 async def delete_system_path(req: DeletePathRequest):
     from capabilities.desktop import delete_path
     return delete_path(req.path)
+
+
+# ─── Voice Transcription ─────────────────────────────────────────────────────
+
+@router.post("/voice/transcribe")
+async def transcribe_voice(file: UploadFile = File(...)):
+    """
+    Transcribe a recorded audio file using faster-whisper.
+    Falls back with a clear error if faster-whisper is not installed.
+    """
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        raise HTTPException(
+            status_code=501,
+            detail="faster-whisper is not installed. Run: pip install faster-whisper"
+        )
+
+    # Save uploaded audio to a temp file
+    suffix = os.path.splitext(file.filename or "audio.wav")[1] or ".wav"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    try:
+        logger.info(f"Transcribing voice file: {tmp_path}")
+        model = WhisperModel("base", device="cpu", compute_type="int8")
+        segments, _ = model.transcribe(tmp_path, beam_size=5)
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        logger.info(f"Transcription result: {text}")
+        return {"text": text}
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass

@@ -47,14 +47,14 @@ class MemoryManager:
         # Remove if already exists to move to top
         if prompt in self.history:
             self.history.remove(prompt)
-        
+
         self.history.insert(0, prompt)
-        # Limit to last 10 as requested
-        self.history = self.history[:10]
+        # Keep last 50 entries (matches frontend limit)
+        self.history = self.history[:50]
         self._save()
 
     def save_history(self, history: List[str]):
-        self.history = history[:10]
+        self.history = history[:50]
         self._save()
 
     def get_folders(self) -> List[Dict[str, Any]]:

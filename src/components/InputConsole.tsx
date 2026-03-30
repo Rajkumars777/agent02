@@ -17,6 +17,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
     const [input, setInput] = useState("");
     const [isFocused, setIsFocused] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
+    const [voiceError, setVoiceError] = useState<string | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -29,7 +30,6 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
             appliedCommandRef.current = lastCommand;
             if (inputRef.current) {
                 inputRef.current.focus();
-                // Reset height for the text
                 inputRef.current.style.height = 'auto';
                 inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
             }
@@ -44,18 +44,23 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
         }
     }, [input]);
 
+    // Clear voice error after 5 seconds
+    useEffect(() => {
+        if (voiceError) {
+            const t = setTimeout(() => setVoiceError(null), 5000);
+            return () => clearTimeout(t);
+        }
+    }, [voiceError]);
 
     const handleSubmit = (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!input.trim() || loading) return;
         onSend(input);
         setInput("");
-        // setWebStatus(""); // Clear web status on new chat
-        // setWebResult(null);
-        // setScreenshotPath(null);
     };
 
     const startRecording = async () => {
+        setVoiceError(null);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
@@ -69,29 +74,18 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
             };
 
             mediaRecorder.onstop = async () => {
-                // Create audio blob
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-
-                // Send to backend for transcription
                 await transcribeAudio(audioBlob);
-
-                // Stop all tracks
                 stream.getTracks().forEach(track => track.stop());
             };
 
             mediaRecorder.start();
             setIsRecording(true);
-
-            // Auto-stop after 5 seconds (you can adjust this)
-            setTimeout(() => {
-                if (mediaRecorderRef.current?.state === 'recording') {
-                    stopRecording();
-                }
-            }, 5000);
+            // No auto-stop — user must click stop manually
 
         } catch (error) {
             console.error('Microphone error:', error);
-            alert('Could not access microphone. Please allow microphone permissions.');
+            setVoiceError('Could not access microphone. Please allow microphone permissions.');
         }
     };
 
@@ -108,7 +102,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
             formData.append('file', audioBlob, 'voice_command.wav');
 
             const base = await getApiBase();
-            const response = await fetch(`${base}/api/voice/transcribe`, {
+            const response = await fetch(`${base}/tools/voice/transcribe`, {
                 method: 'POST',
                 body: formData,
             });
@@ -120,13 +114,12 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
             const data = await response.json();
 
             if (data.text) {
-                // CRITICAL: Put text in input box, do NOT execute
                 setInput(data.text);
             }
 
         } catch (error) {
             console.error('Transcription error:', error);
-            alert('Voice transcription failed. Make sure the backend is running with Faster-Whisper installed.');
+            setVoiceError('Voice transcription failed. Make sure the backend is running with Whisper installed.');
         }
     };
 
@@ -143,12 +136,13 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
             e.preventDefault();
             handleSubmit();
         }
+        // Shift+Enter adds new line naturally (default textarea behavior)
     };
 
 
 
     return (
-        <div className="w-full max-w-3xl mx-auto relative z-[60] flex flex-col gap-3">
+        <div className="w-full max-w-3xl mx-auto relative z-[60] flex flex-col gap-2">
             <div className="relative">
                 {/* Ambient Glow behind the bar */}
                 <div
@@ -162,7 +156,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
                     onSubmit={handleSubmit}
                     className={cn(
                         "relative flex items-center gap-3 p-1.5 rounded-[1.5rem] border transition-all duration-500",
-                        "glass-pane items-end", // Changed items-center to items-end for better multi-line look
+                        "glass-pane items-end",
                         isFocused
                             ? "border-primary/40 shadow-[0_0_30px_-10px_oklch(0.68_0.28_280/0.3)] scale-[1.005]"
                             : "border-border/60 hover:border-border/80"
@@ -173,7 +167,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
                 >
                     {/* Visual Anchor / Icon */}
                     <div className={cn(
-                        "ml-2 mb-2 p-2 rounded-full transition-all duration-500", // Added mb-2
+                        "ml-2 mb-2 p-2 rounded-full transition-all duration-500",
                         isFocused
                             ? "bg-primary/15 text-primary scale-105 rotate-6"
                             : "bg-secondary text-muted-foreground/60"
@@ -188,7 +182,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
                         onKeyDown={handleKeyDown}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
-                        placeholder={isRecording ? "🎤 Listening..." : "Ask NEXUS to do anything..."}
+                        placeholder={isRecording ? "🎤 Listening... click mic to stop" : "Ask NEXUS to do anything..."}
                         className={cn(
                             "flex-1 bg-transparent border-none outline-none text-base placeholder:text-muted-foreground/40 py-3 text-foreground font-normal tracking-tight focus:ring-0 resize-none",
                             "min-h-[44px] max-h-[200px] overflow-y-auto custom-scrollbar"
@@ -196,7 +190,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
                         rows={1}
                     />
 
-                    <div className="mr-1 mb-1.5 flex items-center gap-2"> {/* Added mb-1.5 */}
+                    <div className="mr-1 mb-1.5 flex items-center gap-2">
                         {/* Voice Button */}
                         <button
                             type="button"
@@ -207,7 +201,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
                                     ? "bg-red-500 animate-pulse"
                                     : "bg-secondary hover:bg-blue-500/10 text-muted-foreground hover:text-blue-500"
                             )}
-                            title={isRecording ? "Stop" : "Speak"}
+                            title={isRecording ? "Click to stop recording" : "Click to speak"}
                         >
                             <Mic className={cn("w-4 h-4 transition-transform duration-300", !isRecording && "group-hover:scale-110")} />
                             {isRecording && (
@@ -240,16 +234,46 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
                 </motion.form>
             </div>
 
-            {/* Helper Text */}
-            {isRecording && (
-                <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-center text-[10px] text-red-400 font-bold uppercase tracking-widest"
-                >
-                    🎤 Recording...
-                </motion.div>
-            )}
+            {/* Helper hints row */}
+            <div className="flex items-center justify-between px-2 min-h-[16px]">
+                {/* Voice error message */}
+                <AnimatePresence>
+                    {voiceError && (
+                        <motion.span
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="text-[10px] text-red-400 font-medium"
+                        >
+                            ⚠️ {voiceError}
+                        </motion.span>
+                    )}
+                    {isRecording && !voiceError && (
+                        <motion.span
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-[10px] text-red-400 font-bold uppercase tracking-widest"
+                        >
+                            🎤 Recording — click mic to stop
+                        </motion.span>
+                    )}
+                    {!voiceError && !isRecording && <span />}
+                </AnimatePresence>
+
+                {/* Shift+Enter hint when focused */}
+                <AnimatePresence>
+                    {isFocused && !isRecording && (
+                        <motion.span
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="text-[10px] text-muted-foreground/40 font-mono"
+                        >
+                            Shift+Enter for new line · Ctrl+K to focus
+                        </motion.span>
+                    )}
+                </AnimatePresence>
+            </div>
         </div>
     );
 }

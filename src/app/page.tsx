@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { HeroSection } from "@/components/HeroSection";
 import { InputConsole } from "@/components/InputConsole";
 import { TimelineFeed, Step } from "@/components/TimelineFeed";
@@ -11,7 +11,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { chatWithAgent, cancelOperation, generateTaskId, resumeTask, getHistory, getFolders } from "@/lib/api";
 import { useWebsocket, WebSocketEvent } from "@/hooks/useWebsocket";
 import { motion, AnimatePresence } from "framer-motion";
-import { StopCircle, Edit3, RotateCcw, Globe, Sun, Moon, Settings } from "lucide-react";
+import { StopCircle, RotateCcw, Sun, Moon, Settings, X, PenSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
@@ -22,10 +22,12 @@ export default function Dashboard() {
   const [cancelled, setCancelled] = useState(false);
   const [isAssistantMode, setIsAssistantMode] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  // Always start with dark on server; sync from localStorage after mount to avoid hydration mismatch
+  const [isDark, setIsDark] = useState<boolean>(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [folders, setFolders] = useState<any[]>([]);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Load history and folders on mount
   useEffect(() => {
@@ -41,14 +43,36 @@ export default function Dashboard() {
     loadMemory();
   }, []);
 
-  // Sync theme with document class
+  // On first mount, read saved preference from localStorage (runs client-side only)
+  useEffect(() => {
+    const stored = localStorage.getItem("nexus-theme");
+    if (stored) setIsDark(stored === "dark");
+  }, []);
+
+  // Sync theme class + persist whenever isDark changes
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add("dark");
+      localStorage.setItem("nexus-theme", "dark");
     } else {
       document.documentElement.classList.remove("dark");
+      localStorage.setItem("nexus-theme", "light");
     }
   }, [isDark]);
+
+  // Ctrl+K keyboard shortcut to focus input
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        // Find textarea and focus it
+        const ta = document.querySelector<HTMLTextAreaElement>("textarea");
+        ta?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Handle real-time events from WebSocket
   const handleWebSocketEvent = useCallback((event: WebSocketEvent) => {
@@ -113,10 +137,13 @@ export default function Dashboard() {
     }]);
   }, []);
 
-  // Handle edit/retry with modification
-  const handleEdit = useCallback(() => {
-    // This will be handled by InputConsole - we just need to pass lastCommand
+  // New Chat — reset the feed
+  const handleNewChat = useCallback(() => {
+    setSteps([]);
+    setLastCommand("");
     setCancelled(false);
+    setLoading(false);
+    setActiveTaskId(null);
   }, []);
 
   // Keep track of the latest agent thought process
@@ -169,7 +196,7 @@ export default function Dashboard() {
       setLoading(false);
       setTimeout(() => setActiveTaskId(null), 2000);
       
-      // Refresh history from backend to ensure last 10 limit is applied
+      // Refresh history from backend to ensure limit is applied
       try {
         const historyRes = await getHistory();
         if (historyRes.history) setHistory(historyRes.history);
@@ -212,8 +239,22 @@ export default function Dashboard() {
       {/* Floating Controls */}
       <div className="fixed top-8 left-8 right-8 flex justify-between items-center z-[100] pointer-events-none">
 
-        {/* Assistant Mode Button (Left) */}
-        <div className="pointer-events-auto">
+        {/* Left: New Chat + Assistant Mode */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {/* New Chat Button */}
+          <button
+            onClick={handleNewChat}
+            title="New Chat (clear conversation)"
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-[0.15em] transition-all shadow-xl backdrop-blur-xl border",
+              "bg-secondary/80 text-muted-foreground/60 border-border/40 hover:bg-secondary hover:border-border/60 hover:text-foreground"
+            )}
+          >
+            <PenSquare className="w-3.5 h-3.5" />
+            New Chat
+          </button>
+
+          {/* Assistant Mode Button */}
           <button
             onClick={() => setIsAssistantMode(!isAssistantMode)}
             className={cn(
@@ -242,6 +283,7 @@ export default function Dashboard() {
           <button
             onClick={() => setIsDark(!isDark)}
             className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-400 transition-all hover:scale-105 shadow-xl backdrop-blur-xl group relative overflow-hidden"
+            title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
             <AnimatePresence mode="wait">
               {isDark ? (
@@ -269,6 +311,7 @@ export default function Dashboard() {
           <button
             onClick={() => setIsHistoryOpen(true)}
             className="p-2.5 rounded-xl bg-secondary/80 hover:bg-secondary border border-border/40 text-muted-foreground/60 transition-all hover:scale-105 shadow-xl backdrop-blur-xl group"
+            title="History"
           >
             <RotateCcw className="w-4 h-4 group-hover:rotate-[-45deg] transition-transform duration-300" />
           </button>
@@ -303,7 +346,7 @@ export default function Dashboard() {
             lastCommand={lastCommand}
           />
 
-          {/* Stop/Edit Controls */}
+          {/* Stop Controls */}
           <AnimatePresence>
             {loading && (
               <motion.div
@@ -338,9 +381,11 @@ export default function Dashboard() {
               setLastCommand(""); // Force re-trigger of useEffect in InputConsole
               setTimeout(() => setLastCommand(content), 10);
             }}
+            isLoading={loading}
           />
         </div>
       </div>
+
       {/* History Sidebar Drawer */}
       <AnimatePresence>
         {
@@ -370,7 +415,7 @@ export default function Dashboard() {
                       onClick={() => setIsHistoryOpen(false)}
                       className="p-1 hover:bg-secondary rounded-md transition-colors"
                     >
-                      <RotateCcw className="w-4 h-4 text-muted-foreground rotate-45" /> {/* Using rotate as close icon substitute for now */}
+                      <X className="w-4 h-4 text-muted-foreground" />
                     </button>
                   </div>
 
