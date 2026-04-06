@@ -11,7 +11,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { chatWithAgent, cancelOperation, generateTaskId, resumeTask, getHistory, getFolders } from "@/lib/api";
 import { useWebsocket, WebSocketEvent } from "@/hooks/useWebsocket";
 import { motion, AnimatePresence } from "framer-motion";
-import { StopCircle, RotateCcw, Sun, Moon, Settings, X, PenSquare } from "lucide-react";
+import { StopCircle, RotateCcw, Sun, Moon, Settings, X, PenSquare, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
@@ -138,13 +138,57 @@ export default function Dashboard() {
   }, []);
 
   // New Chat — reset the feed
-  const handleNewChat = useCallback(() => {
+  const handleNewChat = () => {
     setSteps([]);
     setLastCommand("");
     setCancelled(false);
     setLoading(false);
     setActiveTaskId(null);
-  }, []);
+  };
+
+  const handleDownloadChat = () => {
+    if (steps.length === 0) return;
+
+    let exportText = "=== NEXUS CHAT EXPORT ===\n";
+    exportText += `Date: ${new Date().toLocaleString()}\n\n`;
+
+    const groups: { type: "User" | "AI"; steps: Step[] }[] = [];
+    steps.forEach((step) => {
+      if (step.type === "User") {
+        groups.push({ type: "User", steps: [step] });
+      } else {
+        const last = groups[groups.length - 1];
+        if (last && last.type === "AI") {
+          last.steps.push(step);
+        } else {
+          groups.push({ type: "AI", steps: [step] });
+        }
+      }
+    });
+
+    groups.forEach((group) => {
+      if (group.type === "User") {
+        exportText += `\n[ ${group.steps[0].timestamp} ] USER:\n${group.steps[0].content}\n`;
+      } else {
+        const decision = [...group.steps].reverse().find((s) => s.type === "Decision");
+        const action = [...group.steps].reverse().find((s) => s.type === "Action");
+        const best = decision ?? action ?? group.steps[group.steps.length - 1];
+        const cleanContent = best.content.replace(/Forwarding request to OpenClaw Engine\.\.\.\s*/g, "").trim();
+        exportText += `\n[ ${best.timestamp} ] NEXUS:\n${cleanContent}\n`;
+      }
+      exportText += `--------------------------------------------------\n`;
+    });
+
+    const blob = new Blob([exportText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `nexus_chat_${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Keep track of the latest agent thought process
   const handleSend = async (input: string) => {
@@ -155,7 +199,7 @@ export default function Dashboard() {
     setLastCommand("");
 
     const timestamp = new Date().toLocaleTimeString();
-    
+
     // 1. Add User message to the feed immediately (Persistent history)
     setSteps(prev => [...prev, { type: "User", content: input, timestamp }]);
 
@@ -195,7 +239,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
       setTimeout(() => setActiveTaskId(null), 2000);
-      
+
       // Refresh history from backend to ensure limit is applied
       try {
         const historyRes = await getHistory();
@@ -254,18 +298,18 @@ export default function Dashboard() {
             New Chat
           </button>
 
-          {/* Assistant Mode Button */}
           <button
-            onClick={() => setIsAssistantMode(!isAssistantMode)}
+            onClick={handleDownloadChat}
+            disabled={steps.length === 0}
+            title="Export full chat history"
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-[0.15em] transition-all shadow-xl backdrop-blur-xl border",
-              isAssistantMode
-                ? "bg-blue-500/20 text-blue-500 dark:text-blue-400 border-blue-500/40 shadow-blue-500/10"
-                : "bg-secondary/80 text-muted-foreground/60 border-border/40 hover:bg-secondary hover:border-border/60"
+              "bg-secondary/80 text-muted-foreground/60 border-border/40 hover:bg-secondary hover:border-border/60 hover:text-indigo-400",
+              steps.length === 0 && "opacity-50 cursor-not-allowed"
             )}
           >
-            <div className={cn("w-1.5 h-1.5 rounded-full", isAssistantMode ? "bg-blue-400 animate-pulse" : "bg-slate-500")} />
-            {isAssistantMode ? "Active" : "Assistant"}
+            <Download className="w-3.5 h-3.5" />
+            Export Context
           </button>
         </div>
 
@@ -346,6 +390,38 @@ export default function Dashboard() {
             lastCommand={lastCommand}
           />
 
+          {/* Greeting & Suggested Prompts */}
+          <AnimatePresence>
+            {steps.length === 0 && !loading && (
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, pointerEvents: "none" }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="mt-8 flex flex-col items-center w-full px-4"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-sm font-medium text-muted-foreground/80">Hello! Try asking me to...</span>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2 max-w-2xl">
+                  {[
+                    "Search the web for the latest AI news",
+                    "Summarize the content of a webpage",
+                    "Find all images on my Desktop and move them to a new folder called 'Screenshots'",
+                    "Create an Excel file on my Desktop containing a weekly budget template",
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => handleSend(chip)}
+                      className="text-xs md:text-sm px-4 py-2 bg-secondary/40 hover:bg-primary/20 text-muted-foreground hover:text-foreground transition-all rounded-full border border-border/30 hover:border-primary/40 shadow-sm"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {/* Stop Controls */}
           <AnimatePresence>
             {loading && (
@@ -374,9 +450,9 @@ export default function Dashboard() {
         steps.length > 0 ? "opacity-100" : "opacity-0 pointer-events-none"
       )}>
         <div className="w-full h-full overflow-y-auto pb-48 pt-4 custom-scrollbar">
-          <TimelineFeed 
-            steps={steps} 
-            onOptionSelect={handleOptionSelect} 
+          <TimelineFeed
+            steps={steps}
+            onOptionSelect={handleOptionSelect}
             onEdit={(content) => {
               setLastCommand(""); // Force re-trigger of useEffect in InputConsole
               setTimeout(() => setLastCommand(content), 10);
@@ -420,23 +496,24 @@ export default function Dashboard() {
                   </div>
 
                   {/* Drawer Content */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                      <RecentsHistory
-                        recents={history}
-                        folders={folders}
-                        onFoldersChange={setFolders}
-                        onHistoryChange={setHistory}
-                        onSelect={(cmd) => {
-                          handleSend(cmd);
-                          setIsHistoryOpen(false);
-                        }}
-                        onEdit={(cmd) => {
-                          setLastCommand("");
-                          setTimeout(() => setLastCommand(cmd), 10);
-                          setIsHistoryOpen(false);
-                        }}
-                      />
-                    </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <RecentsHistory
+                      recents={history}
+                      folders={folders}
+                      onFoldersChange={setFolders}
+                      onHistoryChange={setHistory}
+                      onSelect={(cmd) => {
+                        setLastCommand("");
+                        setTimeout(() => setLastCommand(cmd), 10);
+                        setIsHistoryOpen(false);
+                      }}
+                      onEdit={(cmd) => {
+                        setLastCommand("");
+                        setTimeout(() => setLastCommand(cmd), 10);
+                        setIsHistoryOpen(false);
+                      }}
+                    />
+                  </div>
                 </div>
               </motion.div>
             </>

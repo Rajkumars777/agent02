@@ -33,7 +33,7 @@ def _load_config() -> dict:
         return {
             "ai_provider": "google",
             "api_key": os.getenv("GEMINI_API_KEY", ""),
-            "ai_model": "gemini-2.5-flash",
+            "ai_model": "gpt-4o",
         }
 
 def get_client():
@@ -66,34 +66,39 @@ def get_client():
         ), model
 
     # Default: direct OpenAI / configured provider
-    return OpenAI(api_key=config.get("api_key", "")), config.get("ai_model", "gpt-4o-mini")
+    return OpenAI(api_key=config.get("api_key", "")), config.get("ai_model", "gpt-4o")
 
 
 # ─── Main Entry Point ────────────────────────────────────────────────────────
 
-async def run_agent(user_input: str, task_id: str = "default", channel: str = "nexus", sender: str = "main"):
+async def run_agent(user_input: str, task_id: str = "default", channel: str = "nexus", sender: str = "main", files: list[dict] = None):
     from api.routers.events import emit_event
     from core.openclaw_client import send_to_openclaw
 
     await emit_event(task_id, "Thinking", {"message": "Forwarding request to OpenClaw Engine..."})
 
     try:
-        logger.info(f"Routing execution to OpenClaw for: {user_input}")
+        logger.info(f"Routing execution to OpenClaw for: {user_input} (files: {len(files) if files else 0})")
 
         loop = asyncio.get_running_loop()
 
         def on_delta_callback(text: str):
             if text.strip():
-                asyncio.run_coroutine_threadsafe(
-                    emit_event(task_id, "AgentStep", {"desc": text, "tool": "OpenClaw", "success": True}),
-                    loop
-                )
+                try:
+                    if not loop.is_closed():
+                        asyncio.run_coroutine_threadsafe(
+                            emit_event(task_id, "AgentStep", {"desc": text, "tool": "OpenClaw", "success": True}),
+                            loop
+                        )
+                except Exception:
+                    pass
 
         result_text = await asyncio.to_thread(
             send_to_openclaw,
             user_input,
             channel=channel,
             sender=sender,
+            files=files,
             on_delta=on_delta_callback
         )
 

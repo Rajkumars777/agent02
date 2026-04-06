@@ -21,6 +21,7 @@ python-pptx
 reportlab
 PyPDF2
 docx2pdf
+faster-whisper>=1.0.3
 
 # ─────────────────────────────────────────────────────
 # Desktop Application (build only)

@@ -272,7 +272,7 @@ def main():
     provider = input("\n  Provider [openai/google/openrouter] (default: openai): ").strip().lower() or "openai"
 
     if provider == "openai":
-        default_model = "gpt-4o-mini"
+        default_model = "gpt-4o"
         key_hint = "sk-..."
     elif provider == "google":
         default_model = "gemini-2.0-flash"

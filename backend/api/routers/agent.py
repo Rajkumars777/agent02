@@ -17,6 +17,7 @@ class AgentRequest(BaseModel):
     task_id: Optional[str] = None
     channel: Optional[str] = "nexus"
     sender: Optional[str] = "main"
+    files: Optional[list[dict[str, Any]]] = None
 
 class CancelRequest(BaseModel):
     task_id: str
@@ -43,7 +44,8 @@ async def chat_with_agent(request: AgentRequest):
             request.input, 
             task_id=task_id, 
             channel=channel, 
-            sender=sender
+            sender=sender,
+            files=request.files
         ))
         active_tasks[task_id] = task
         

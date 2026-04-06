@@ -46,6 +46,8 @@ from api.routers import events as events_router
 from api.routers import settings as settings_router
 from api.routers import openclaw as openclaw_router
 from api.routers import tools as tools_router
+from api.routers import system as system_router
+from api.routers import voice as voice_router
 
 # Configure logging
 log_file = os.path.join(os.path.expanduser("~"), "nexus_backend.log")
@@ -81,6 +83,8 @@ app.include_router(events_router.router)
 app.include_router(settings_router.router)
 app.include_router(openclaw_router.router)
 app.include_router(tools_router.router)
+app.include_router(system_router.router)
+app.include_router(voice_router.router)
 
 @app.get("/health")
 async def health_check():

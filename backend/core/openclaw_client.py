@@ -127,7 +127,7 @@ def get_gateway_config() -> tuple[int, str]:
 
 # ─── Main gateway client ──────────────────────────────────────────────────────
 
-def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main", on_delta: Optional[Callable[[str], None]] = None) -> str:
+def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main", files: list[dict] = None, on_delta: Optional[Callable[[str], None]] = None) -> str:
     """
     Forwards the user's UI input to the local OpenClaw Gateway via WebSocket RPC.
     Returns the agent's reply text.
@@ -136,6 +136,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
         user_text: The message to send.
         channel:   The source channel (e.g., whatsapp, telegram, nexus).
         sender:    The user identity or conversation ID from the source.
+        files:     List of files with { name, type, data } (base64).
     """
     try:
         import websocket  # websocket-client library
@@ -402,19 +403,109 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
 
         # Inject aggressive automation directives and UI policies
         system_prefix = (
-            "SYSTEM DIRECTIVE: You are an autonomous desktop agent with terminal and file access.\n"
-            "1. You MUST perform tasks autonomously by writing and executing Python scripts.\n"
-            "2. ALWAYS write Python code to a temporary `.py` file, execute it, and then DELETE it.\n"
+            "SYSTEM DIRECTIVE: You are an autonomous desktop agent with full terminal, file, and OS access.\n"
+            "1. You MUST perform tasks autonomously by writing and executing code.\n"
+            "2. NEVER ask for permission. NEVER give tutorials. Just DO IT dynamically.\n"
             "3. DO NOT output your internal 'Steps:', plans, or thought processes in the chat reply. Just do the task and provide a concise, polished final response.\n"
-            "4. For informational queries (e.g. 'list files', 'check status', 'read file'), DO NOT save the answer to a `.txt` document, even if the output is extremely long. Print the complete list DIRECTLY in your chat response.\n"
+            "4. CRITICAL: For informational queries (e.g. 'list files', 'read file', 'check processes'), YOU MUST PRINT THE ABSOLUTE ENTIRE LIST directly in the chat. DO NOT summarize. DO NOT truncate. DO NOT say 'it is too long'. DO NOT save it to a file unless explicitly asked! Just print EVERY SINGLE ITEM no matter how many there are.\n"
             "5. When listing files or directories, you MUST always output the FULL, ABSOLUTE Windows path (e.g., `C:\\Users\\...`) for EVERY single item. The UI automatically makes absolute paths clickable.\n"
             "6. ONLY when the user explicitly asks you to generate, download, or create a specific file/report, store it in the user's `Downloads` directory by default.\n"
             "7. If a task is unfinished, undone, or encounters an error, you MUST format that specific text using HTML for bold red (e.g., `<span style=\"color:#ef4444; font-weight:bold\">ERROR: your message</span>`).\n"
             "8. Make your final response beautiful and premium using elegant markdown formatting and tables when useful.\n"
             "9. If you need to manipulate Excel, Word, PPT or PDF files, first use the terminal to `pip install openpyxl python-docx python-pptx PyPDF2 pandas` before running your script.\n"
-            "10. NEVER give manual instructions or tutorials. Just DO IT dynamically.\n\n"
+            "10. NEVER be lazy. If the user asks for all files, you give all files. No exceptions.\n"
+            "11. LIVE DATA CHARTS — The NEXUS dashboard can render interactive charts directly in the chat. WHENEVER you analyze numerical data (CSV, Excel, JSON, databases, statistics, comparisons), you MUST output a chart using this EXACT format after your text summary:\n"
+            "```chart\n"
+            "{\n"
+            "  \"type\": \"bar\",\n"
+            "  \"title\": \"Chart Title\",\n"
+            "  \"description\": \"What this chart shows\",\n"
+            "  \"data\": [{\"label\": \"Jan\", \"value\": 120}, {\"label\": \"Feb\", \"value\": 95}],\n"
+            "  \"xKey\": \"label\",\n"
+            "  \"yKeys\": [\"value\"],\n"
+            "  \"unit\": \"\"\n"
+            "}\n"
+            "```\n"
+            "    CHART TYPES: use \"bar\" for comparisons, \"line\" for trends over time, \"area\" for cumulative data, \"pie\" for proportions/shares.\n"
+            "    MULTIPLE SERIES: add more keys to the data objects and list them in yKeys: e.g. yKeys: [\"revenue\", \"profit\"].\n"
+            "    ALWAYS include a chart when presenting: sales data, file sizes, counts, scores, time-series, survey results, financial data, or any tabular numeric data.\n"
+            "    Example stacked bar: {\"type\":\"bar\", \"stacked\":true, \"xKey\":\"month\", \"yKeys\":[\"income\",\"expense\"]}\n\n"
+            "12. WEB BROWSER AUTOMATION — You have a live Kapture-powered browser available via REST.\n"
+            "    Chrome must be open on the user's machine with the Kapture extension active.\n"
+            "    Use these endpoints (all at http://127.0.0.1:8000/tools/browser/):\n\n"
+            "    NAVIGATION:\n"
+            "      POST /tools/browser/navigate       {\"url\": \"https://...\"}\n"
+            "      POST /tools/browser/back           {}  or {\"tab_id\": N}\n"
+            "      POST /tools/browser/forward        {}\n"
+            "      POST /tools/browser/reload         {}\n\n"
+            "    PAGE CONTENT:\n"
+            "      GET  /tools/browser/screenshot     → {result: <base64 WebP image>}\n"
+            "      GET  /tools/browser/content        → {result: <full HTML DOM>}\n"
+            "      GET  /tools/browser/console        → {result: <console logs>}\n"
+            "      POST /tools/browser/elements       {\"selector\": \"CSS selector\"}\n\n"
+            "    INTERACTIONS:\n"
+            "      POST /tools/browser/click          {\"selector\": \"#btn-submit\"}\n"
+            "      POST /tools/browser/fill           {\"selector\": \"#email\", \"value\": \"user@x.com\"}\n"
+            "      POST /tools/browser/hover          {\"selector\": \".dropdown\"}\n"
+            "      POST /tools/browser/keypress       {\"key\": \"Enter\"}  (also Tab, Escape, ArrowDown)\n"
+            "      POST /tools/browser/select         {\"selector\": \"#country\", \"value\": \"IN\"}\n\n"
+            "    TABS:\n"
+            "      GET  /tools/browser/tabs           → list all open tabs with IDs (tab_id is a STRING like '992479167')\n"
+            "      POST /tools/browser/close-tab      {\"tab_id\": \"992479167\"}\n\n"
+            "    VISION (uses AI Vision to see the screen):\n"
+            "      POST /tools/browser/analyze        {\"question\": \"What selectors are on this page?\"}\n"
+            "      GET  /tools/browser/check-disruption  → detects login walls/CAPTCHAs\n"
+            "      GET  /tools/browser/ensure-tab         → ensures a tab exists (auto-creates if needed), returns tab_id\n\n"
+            "    CRITICAL RULES:\n"
+            "      1. ALWAYS call GET /tools/browser/ensure-tab FIRST — it returns tab_id AND auto-opens Chrome if no tabs exist.\n"
+            "      2. ALWAYS pass tab_id (a string like '992479167') in every subsequent call: {\"url\":\"...\", \"tab_id\":\"992479167\"}\n"
+            "      3. tab_id is ALWAYS a string — never an integer.\n"
+            "      4. After /browser/navigate, wait 1.5 seconds before calling screenshot or content.\n"
+            "      5. If navigate returns a timeout error, the page still loaded. Wait 1.5s then call /browser/content.\n\n"
+            "    WORKFLOW EXAMPLE (search on Amazon):\n"
+            "      Step 1: GET /tools/browser/ensure-tab → get tab_id (e.g. '992479167')\n"
+            "      Step 2: POST /tools/browser/navigate {\"url\":\"https://amazon.com\", \"tab_id\":\"992479167\"}\n"
+            "      Step 3: Wait 1.5 seconds\n"
+            "      Step 4: POST /tools/browser/fill {\"selector\":\"#twotabsearchtextbox\", \"value\":\"iphone\", \"tab_id\":\"992479167\"}\n"
+            "      Step 5: POST /tools/browser/keypress {\"key\":\"Enter\", \"tab_id\":\"992479167\"}\n\n"
+            "13. DISRUPTION HANDLING — If automation hits a login wall, CAPTCHA, password prompt, or 2FA:\n"
+            "    a. Call GET /tools/browser/check-disruption\n"
+            "    b. If disruption=true: STOP automation immediately\n"
+            "    c. Return the disruption.message to the user in your chat reply\n"
+            "    d. Ask the user for the required value (password, OTP, etc.)\n"
+            "    e. Wait for the user's next message with the value\n"
+            "    f. Use POST /tools/browser/fill to enter it, then continue automation\n"
+            "    EXAMPLE: 'I encountered a login wall on GitHub. Please provide your GitHub password\n"
+            "    (your username github.com/yourname is already entered):'\n\n"
             f"USER REQUEST: {user_text}"
         )
+
+        # ── Multi-modal Construction ──
+        if files and len(files) > 0:
+            # Construct a multi-modal message object
+            content_blocks = [{"type": "text", "text": system_prefix}]
+            for f in files:
+                mimetype = f.get("type", "application/octet-stream")
+                # Strip 'data:mime/type;base64,' prefix if present
+                data = f.get("data", "")
+                if "," in data:
+                    data = data.split(",")[1]
+                
+                if mimetype.startswith("image/"):
+                    content_blocks.append({
+                        "type": "image",
+                        "image": { "data": data, "format": mimetype.split("/")[-1] }
+                    })
+                else:
+                    # Treat as document/generic file
+                    content_blocks.append({
+                        "type": "file",
+                        "file": { "data": data, "name": f.get("name", "file"), "mimeType": mimetype }
+                    })
+            
+            message_payload = { "content": content_blocks }
+        else:
+            message_payload = system_prefix
 
         chat_req    = {
             "type":   "req",
@@ -422,7 +513,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
             "method": "chat.send",
             "params": {
                 "sessionKey":     session_key,
-                "message":        system_prefix,
+                "message":        message_payload,
                 "deliver":        False,
                 "idempotencyKey": _gen_id(),
             },

@@ -4,7 +4,8 @@ node_modules/
 .env
 backend/.env
 backend/venv/
-backend/__pycache__/
+**/__pycache__/
+*.pyc
 backend/backend.log
 dist/
 build/
@@ -17,3 +18,7 @@ temp_payload/
 .DS_Store
 Thumbs.db
 bin/
+tsconfig.tsbuildinfo
+build_log.txt
+NEXUS.spec
+build-error.log

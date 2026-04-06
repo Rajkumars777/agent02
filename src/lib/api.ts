@@ -60,7 +60,7 @@ export async function fetchHealth() {
     return res.json();
 }
 
-export async function chatWithAgent(message: string, taskId?: string) {
+export async function chatWithAgent(message: string, taskId?: string, files?: any[]) {
     // Cancel any previous request
     if (currentAbortController) {
         currentAbortController.abort();
@@ -74,7 +74,11 @@ export async function chatWithAgent(message: string, taskId?: string) {
         const res = await fetch(`${base}/agent/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ input: message, task_id: currentTaskId }),
+            body: JSON.stringify({ 
+                input: message, 
+                task_id: currentTaskId,
+                files: files 
+            }),
             signal: currentAbortController.signal
         });
         await checkResponse(res);
@@ -272,6 +276,13 @@ export async function openPath(path: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path }),
     });
+    await checkResponse(res);
+    return res.json();
+}
+
+export async function getSystemInfo() {
+    const base = await getApiBase();
+    const res = await fetch(`${base}/system/info`);
     await checkResponse(res);
     return res.json();
 }
