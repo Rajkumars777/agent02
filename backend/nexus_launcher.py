@@ -54,9 +54,24 @@ else:
 STATIC_DIR = os.path.join(APP_DIR, "out")  # Next.js static build
 
 # Portable Node.js download (Windows x64, LTS)
-NODE_VERSION = "v22.13.1"
+NODE_VERSION = "v22.14.0"
 NODE_ZIP_URL = f"https://nodejs.org/dist/{NODE_VERSION}/node-{NODE_VERSION}-win-x64.zip"
 NODE_ZIP_NAME = f"node-{NODE_VERSION}-win-x64"
+
+# ─── Single Instance Lock ───────────────────────────────────────────────────
+
+def is_already_running(port=59231):
+    """Check if another instance of NEXUS is running by binding a local socket."""
+    import socket
+    try:
+        # Create a socket and bind it to a high port
+        _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _lock_socket.bind(("127.0.0.1", port))
+        # Keep it alive for the lifetime of this process
+        globals()["_instance_lock"] = _lock_socket
+        return False
+    except socket.error:
+        return True
 
 # ─── Default Configuration (pre-loaded API key) ───────────────────────────────
 
@@ -235,16 +250,69 @@ def close_splash(splash):
 
 # ─── Dependency Setup ────────────────────────────────────────────────────────
 
+def _get_bundle_version(bundled_out: str) -> str:
+    """Compute a fast version stamp from the bundled out/ folder.
+    Uses the mtime + size of index.html as a lightweight fingerprint.
+    """
+    try:
+        # 1. Check for an explicit .nexus_version stamp written by build.bat
+        stamp_path = os.path.join(bundled_out, ".nexus_version")
+        if os.path.exists(stamp_path):
+            with open(stamp_path, "r") as f:
+                return f.read().strip()
+        # 2. Fallback: use mtime + size of index.html
+        idx = os.path.join(bundled_out, "index.html")
+        if os.path.exists(idx):
+            st = os.stat(idx)
+            return f"{int(st.st_mtime)}-{st.st_size}"
+    except Exception:
+        pass
+    return ""
+
+
 def ensure_app_dir():
-    """Extract bundled files from PyInstaller bundle to APP_DIR on first run."""
+    """Extract bundled Next.js files to APP_DIR — only re-extracts when the
+    bundled version is newer than what was last extracted (version-hash gated).
+    This avoids the full delete+copy on every launch which was the primary
+    source of slow startup.
+    """
     os.makedirs(APP_DIR, exist_ok=True)
 
-    # Copy Next.js static build
     bundled_out = os.path.join(SRC_DIR, "out")
-    if os.path.isdir(bundled_out) and not os.path.isdir(STATIC_DIR):
-        log("Extracting frontend files...")
+    if not os.path.isdir(bundled_out):
+        log("WARNING: bundled out/ not found — UI may not load.")
+        return
+
+    bundled_ver = _get_bundle_version(bundled_out)
+
+    # Read the version that was last extracted
+    extracted_ver_path = os.path.join(STATIC_DIR, ".nexus_version")
+    extracted_ver = ""
+    if os.path.exists(extracted_ver_path):
+        try:
+            with open(extracted_ver_path, "r") as f:
+                extracted_ver = f.read().strip()
+        except Exception:
+            pass
+
+    if bundled_ver and bundled_ver == extracted_ver and os.path.isdir(STATIC_DIR):
+        log(f"UI is up-to-date (version {bundled_ver}) — skipping extraction.")
+        return
+
+    log(f"UI update detected (bundle={bundled_ver}, installed={extracted_ver}) — extracting...")
+    try:
+        if os.path.isdir(STATIC_DIR):
+            shutil.rmtree(STATIC_DIR, ignore_errors=True)
         shutil.copytree(bundled_out, STATIC_DIR)
-        log(f"Frontend extracted to {STATIC_DIR}")
+        # Write the extracted version stamp so next launch skips this
+        try:
+            with open(extracted_ver_path, "w") as f:
+                f.write(bundled_ver)
+        except Exception:
+            pass
+        log(f"Frontend extracted to {STATIC_DIR} (version {bundled_ver})")
+    except Exception as e:
+        log(f"Frontend extraction failed: {e}")
 
 
 def _read_stamp() -> str:
@@ -267,15 +335,26 @@ def _write_stamp(version: str):
 
 def ensure_node():
     """Download portable Node.js only if missing or version stamp mismatches."""
-    # Fast path: stamp matches → nothing to do
-    if os.path.exists(NODE_EXE) and _read_stamp() == NODE_VERSION:
-        log(f"Node.js {NODE_VERSION} already installed — skipping download.")
+    stamp = _read_stamp()
+    
+    # Fast path: matches → nothing to do
+    if os.path.exists(NODE_EXE) and stamp == NODE_VERSION:
+        log(f"Node.js {NODE_VERSION} already installed.")
         return
 
-    # Stamp mismatch or node.exe missing
+    # If node exists but stamp is wrong, maybe it's just a minor mismatch from a manual install
+    if os.path.exists(NODE_EXE) and stamp.startswith("v22"):
+        log(f"Existing Node.js ({stamp}) found. Version check passed (fuzzy).")
+        _write_stamp(NODE_VERSION) # Update stamp to match our current expectation
+        return
+
+    # Truly missing or wrong major version
     if os.path.exists(NODE_EXE):
-        log(f"Node.js version mismatch (need {NODE_VERSION}) — updating...")
-        shutil.rmtree(NODE_DIR, ignore_errors=True)
+        log(f"Node.js version mismatch (have {stamp}, need {NODE_VERSION}) — updating...")
+        try:
+            shutil.rmtree(NODE_DIR, ignore_errors=True)
+        except Exception:
+            pass
     else:
         log(f"Node.js not found — downloading {NODE_VERSION}...")
 
@@ -405,7 +484,9 @@ def start_kapture_mcp():
 
     try:
         log(f"Starting Kapture MCP server: {' '.join(cmd)}")
-        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        # Use CREATE_NO_WINDOW constant (0x08000000) for silent Windows processes
+        CREATE_NO_WINDOW = 0x08000000
+        creation_flags = CREATE_NO_WINDOW | (subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
         _kapture_proc = subprocess.Popen(
             cmd,
             shell=False,
@@ -415,8 +496,7 @@ def start_kapture_mcp():
             env=env,
         )
         _procs.append(_kapture_proc)
-        time.sleep(3)
-        log(f"Kapture MCP running (PID {_kapture_proc.pid}) at ws://localhost:61822/mcp")
+        log(f"Kapture MCP launched (PID {_kapture_proc.pid}) at ws://localhost:61822/mcp")
         log("Open Chrome with the Kapture extension to enable browser automation.")
     except Exception as e:
         log(f"Kapture MCP start failed (non-fatal): {e}")
@@ -436,30 +516,39 @@ def configure_openclaw(api_key: str, provider: str, model: str):
 
     if provider == "openai":
         primary_model = f"openai/{model}"
-        auth_profiles = {
-            "openai:default": {"provider": "openai", "mode": "api_key", "apiKey": api_key}
-        }
     elif provider in ("google", "gemini"):
         primary_model = f"google/{model}"
-        auth_profiles = {
-            "google:default": {"provider": "google", "mode": "api_key", "apiKey": api_key}
-        }
     elif provider == "anthropic":
         primary_model = f"anthropic/{model}"
-        auth_profiles = {
-            "anthropic:default": {"provider": "anthropic", "mode": "api_key", "apiKey": api_key}
-        }
     elif provider == "groq":
         primary_model = f"groq/{model}"
-        auth_profiles = {
-            "groq:default": {"provider": "groq", "mode": "api_key", "apiKey": api_key}
-        }
     else:
         # openrouter or any other
         primary_model = f"openrouter/{model}" if not model.startswith("openrouter/") else model
-        auth_profiles = {
-            "openrouter:default": {"provider": "openrouter", "mode": "api_key", "apiKey": api_key}
-        }
+
+    # Update auth-profiles.json (The correct location for credentials in v2026.3.7)
+    AUTH_PROFILES_PATH = os.path.join(os.path.expanduser("~"), ".openclaw", "agents", "main", "agent", "auth-profiles.json")
+    os.makedirs(os.path.dirname(AUTH_PROFILES_PATH), exist_ok=True)
+
+    auth_data = {"version": 1, "profiles": {}, "lastGood": {}, "usageStats": {}}
+    if os.path.exists(AUTH_PROFILES_PATH):
+        try:
+            with open(AUTH_PROFILES_PATH, "r", encoding="utf-8") as f:
+                auth_data = json.load(f)
+        except Exception:
+            pass
+
+    profile_id = f"{provider}:default"
+    auth_data.setdefault("profiles", {})[profile_id] = {
+        "provider": provider,
+        "mode": "api_key",
+        "type": "api_key",
+        "key": api_key
+    }
+    
+    # Write updated auth-profiles.json
+    with open(AUTH_PROFILES_PATH, "w", encoding="utf-8") as f:
+        json.dump(auth_data, f, indent=2, ensure_ascii=False)
 
     # Merge with existing config to preserve gateway token, device identity etc.
     existing = {}
@@ -472,10 +561,22 @@ def configure_openclaw(api_key: str, provider: str, model: str):
             pass
 
     cfg = existing
-    cfg["auth"] = {"profiles": auth_profiles}
+    # Remove 'auth' section from openclaw.json to prevent "Unrecognized key" errors in v2026.3.7
+    if "auth" in cfg:
+        del cfg["auth"]
+
+    NEXUS_INSTRUCTIONS = (
+        "You are NEXUS, an autonomous assistant with full desktop, terminal, and browser access. "
+        "You MUST perform tasks autonomously by writing and executing scripts. "
+        "NEVER describe your internal steps or ask for permission. Just DO IT."
+    )
+
     cfg["agents"] = {
         "defaults": {
             "model": {"primary": primary_model},
+            "models": {
+                primary_model: {"instructions": NEXUS_INSTRUCTIONS}
+            },
             "workspace": workspace,
         }
     }
@@ -671,7 +772,15 @@ def start_backend():
     def _run():
         try:
             from main import app
-            uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning", use_colors=False)
+            uvicorn.run(
+                app,
+                host="127.0.0.1",
+                port=8000,
+                log_level="warning",
+                use_colors=False,
+                access_log=False,
+                loop="asyncio",
+            )
         except Exception as e:
             log(f"Backend error: {e}")
 
@@ -681,33 +790,35 @@ def start_backend():
     return t
 
 
-def wait_for_gateway(timeout=30):
+def wait_for_gateway(timeout=60):
+    """Non-blocking wait — called from a background thread."""
     import urllib.request as ur
-    log("Waiting for OpenClaw Gateway (port 18789) to be ready...")
+    log("[BG] Waiting for OpenClaw Gateway (port 18789)...")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             ur.urlopen("http://127.0.0.1:18789/api/v1/health", timeout=2)
-            log("OpenClaw Gateway is ready.")
+            log("[BG] OpenClaw Gateway is ready.")
             return True
         except Exception:
-            time.sleep(1)
-    log("OpenClaw Gateway did not start in time.")
+            time.sleep(0.8)
+    log("[BG] WARNING: Gateway did not start in time.")
     return False
 
 
 def wait_for_backend(timeout=30):
+    """Fast polling (100 ms) so browser opens the instant backend is up."""
     import urllib.request as ur
     log("Waiting for FastAPI backend (port 8000) to be ready...")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            ur.urlopen("http://127.0.0.1:8000/health", timeout=2)
+            ur.urlopen("http://127.0.0.1:8000/health", timeout=1)
             log("FastAPI backend is ready.")
             return True
         except Exception:
-            time.sleep(0.5)
-    log("FastAPI backend did not start in time.")
+            time.sleep(0.1)   # 100 ms — feels instant
+    log("ERROR: FastAPI backend did not start in time.")
     return False
 
 
@@ -717,88 +828,123 @@ def first_run_check():
     return not os.path.exists(CONFIG_FILE)
 
 
+def _open_app_window(url: str):
+    """Launch the app in a browser app-window (Edge preferred, then Chrome)."""
+    edge_cases = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    chrome_cases = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ]
+    for path in edge_cases + chrome_cases:
+        if os.path.exists(path):
+            try:
+                subprocess.Popen([path, f"--app={url}",
+                                  "--window-size=1280,800",
+                                  "--disable-extensions",
+                                  "--no-first-run",
+                                  "--disable-default-apps"])
+                log(f"App window launched via {path}")
+                return
+            except Exception as e:
+                log(f"Failed to launch {path}: {e}")
+    log("Falling back to default browser.")
+    webbrowser.open(url)
+
+
 def main():
+    if is_already_running():
+        # Another instance owns the lock — just bring it front
+        log("NEXUS already running — opening browser.")
+        try:
+            _open_app_window("http://localhost:8000")
+        except Exception:
+            pass
+        sys.exit(0)
+
     atexit.register(cleanup)
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
     os.makedirs(APP_DIR, exist_ok=True)
 
-    # Force-kill any existing gateway process on port 18789
-    if os.name == "nt":
-        log("Ensuring port 18789 is free...")
-        subprocess.run(
-            'for /f "tokens=5" %a in (\'netstat -aon ^| findstr :18789 ^| findstr LISTENING\') do taskkill /F /PID %a',
-            shell=True, capture_output=True
-        )
-
     log("=" * 50)
     log("NEXUS Desktop Application Starting...")
     log(f"APP_DIR: {APP_DIR}")
     log(f"SRC_DIR: {SRC_DIR}")
 
+    # ── PARALLEL: Port cleanup + first-run config ─────────────────────────────
+    def _free_port(port: int):
+        """Kill any process holding a given port — silent, best-effort."""
+        if os.name != "nt":
+            return
+        try:
+            CREATE_NO_WINDOW = 0x08000000
+            cmd = (
+                f'for /f "tokens=5" %a in '
+                f'(\'netstat -aon ^| findstr :{port} ^| findstr LISTENING\') '
+                f'do taskkill /F /PID %a'
+            )
+            subprocess.run(cmd, shell=True, capture_output=True,
+                           timeout=6, creationflags=CREATE_NO_WINDOW)
+        except Exception:
+            pass
+
+    # Free ports in background while we continue startup
+    threading.Thread(target=_free_port, args=(18789,), daemon=True, name="port-free-18789").start()
+    threading.Thread(target=_free_port, args=(8000,),  daemon=True, name="port-free-8000").start()
+
     # ── First-run: silent auto-configure (no dialog) ──────────────────────────
     if first_run_check():
-        log("First run detected — auto-configuring with default API key (silent).")
+        log("First run detected — auto-configuring silently.")
         token = configure_openclaw(DEFAULT_API_KEY, DEFAULT_PROVIDER, DEFAULT_MODEL)
         log(f"Auto-setup complete. Token: {token[:8]}...")
     else:
         log("Config found — skipping first-run setup.")
         sync_tokens()
 
-    # ── Dependency setup (fast: stamps prevent re-downloads) ──────────────────
-    splash = show_splash("NEXUS — Checking dependencies...")
-    ensure_app_dir()
-    ensure_node()
-    ensure_openclaw()
-    ensure_kapture_mcp()
+    # ── Dependency setup (stamps make this instant on repeat runs) ───────────
+    splash = show_splash("NEXUS — Starting up...")
+    ensure_app_dir()      # version-gated copy — usually no-op
+    ensure_node()         # stamp-gated download — usually no-op
+    ensure_openclaw()     # directory-gated install — usually no-op
+    ensure_kapture_mcp()  # directory-gated install — usually no-op
     close_splash(splash)
 
-    # ── Start services ────────────────────────────────────────────────────────
-    splash = show_splash("NEXUS — Starting services...")
-
+    # ── Sync tokens, then launch services fully in parallel ───────────────────
     sync_tokens()
 
-    start_openclaw_gateway()
-    wait_for_gateway(timeout=180)
+    splash = show_splash("NEXUS — Launching services...")
+    log("Launching OpenClaw Gateway and FastAPI backend in parallel...")
+    start_openclaw_gateway()   # spawns subprocess / background thread
+    start_backend()            # in-process uvicorn thread
 
-    # Re-sync after gateway starts (it may rewrite openclaw.json on first run)
-    sync_tokens()
+    # ── Open browser the INSTANT the backend responds ─────────────────────────
+    # Gateway wait is non-blocking (runs in background); the browser
+    # opens as soon as FastAPI is up — usually within 2-3 seconds.
+    threading.Thread(
+        target=wait_for_gateway, args=(60,),
+        daemon=True, name="gw-health"
+    ).start()
 
-    start_backend()
-    wait_for_backend(timeout=30)
-
-    start_kapture_mcp()
-
+    be_ready = wait_for_backend(timeout=30)
     close_splash(splash)
 
-    # ── Open Native App Window ───────────────────────────────────────────────
+    if not be_ready:
+        log("ERROR: FastAPI backend did not start in time. Check nexus.log.")
+    else:
+        # Re-sync after gateway has had time to start
+        sync_tokens()
+
+    # Kapture non-critical — fully background
+    threading.Thread(target=start_kapture_mcp, daemon=True, name="kapture").start()
+
+    # ── Open app window ───────────────────────────────────────────────────────
     url = "http://localhost:8000"
-    log(f"Opening native app window at {url}")
-
-    edge_cases = [
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"
-    ]
-    chrome_cases = [
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-    ]
-
-    launched = False
-    for path in edge_cases + chrome_cases:
-        if os.path.exists(path):
-            try:
-                subprocess.Popen([path, f"--app={url}"])
-                launched = True
-                log(f"Launched using {path}")
-                break
-            except Exception as e:
-                log(f"Failed to launch {path}: {e}")
-
-    if not launched:
-        log("Falling back to default browser.")
-        webbrowser.open(url)
+    log(f"Opening app window at {url}")
+    _open_app_window(url)
 
     # ── Keep alive ────────────────────────────────────────────────────────────
     log("NEXUS is running. Press Ctrl+C or close this window to stop.")

@@ -1,9 +1,9 @@
 {
     "ai_provider": "google",
-    "api_key": "AIzaSyC6quuoCtTuEiHk1Y5yfpYIArkJUPIbdaM",
-    "ai_model": "google/gemini-2.5-flash",
+    "api_key": "",
+    "ai_model": "google/gemini-1.5-flash",
     "openclaw_gateway_url": "http://localhost:18789/api/v1/message",
     "openclaw_channel": "",
-    "openclaw_token": "d0e5c108968045f8b0e1c3968f00a7da",
+    "openclaw_token": "",
     "openai_api_key": ""
 }

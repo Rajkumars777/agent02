@@ -197,25 +197,57 @@ def _reconfigure_openclaw(api_key: str, provider: str, model: str) -> str:
 
     if provider == "openai":
         primary_model = f"openai/{model}"
-        auth_profiles = {"openai:default": {"provider": "openai", "mode": "api_key", "apiKey": api_key}}
     elif provider in ("google", "gemini"):
         primary_model = f"google/{model}"
-        auth_profiles = {"google:default": {"provider": "google", "mode": "api_key", "apiKey": api_key}}
     elif provider == "anthropic":
         primary_model = f"anthropic/{model}"
-        auth_profiles = {"anthropic:default": {"provider": "anthropic", "mode": "api_key", "apiKey": api_key}}
     elif provider == "groq":
         primary_model = f"groq/{model}"
-        auth_profiles = {"groq:default": {"provider": "groq", "mode": "api_key", "apiKey": api_key}}
     else:
         primary_model = model if "/" in model else f"openrouter/{model}"
-        auth_profiles = {"openrouter:default": {"provider": "openrouter", "mode": "api_key", "apiKey": api_key}}
 
+    # Update auth-profiles.json (The correct location for credentials in v2026.3.7)
+    AUTH_PROFILES_PATH = os.path.join(os.path.expanduser("~"), ".openclaw", "agents", "main", "agent", "auth-profiles.json")
+    os.makedirs(os.path.dirname(AUTH_PROFILES_PATH), exist_ok=True)
+    
+    auth_data = {"version": 1, "profiles": {}, "lastGood": {}, "usageStats": {}}
+    if os.path.exists(AUTH_PROFILES_PATH):
+        try:
+            with open(AUTH_PROFILES_PATH, "r", encoding="utf-8") as f:
+                auth_data = json.load(f)
+        except Exception:
+            pass
+
+    profile_id = f"{provider}:default"
+    auth_data.setdefault("profiles", {})[profile_id] = {
+        "provider": provider,
+        "mode": "api_key",
+        "type": "api_key",
+        "key": api_key
+    }
+    
+    # Write updated auth-profiles.json
+    with open(AUTH_PROFILES_PATH, "w", encoding="utf-8") as f:
+        json.dump(auth_data, f, indent=2, ensure_ascii=False)
+
+    # ── Update openclaw.json (Main config) ───────────────────────────────────
     cfg = existing
-    cfg["auth"] = {"profiles": auth_profiles}
+    # Remove 'auth' section from openclaw.json to prevent "Unrecognized key" errors
+    if "auth" in cfg:
+        del cfg["auth"]
+
+    NEXUS_INSTRUCTIONS = (
+        "You are NEXUS, an autonomous assistant with full desktop, terminal, and browser access. "
+        "You MUST perform tasks autonomously by writing and executing scripts. "
+        "NEVER describe your internal steps or ask for permission. Just DO IT."
+    )
+        
     cfg["agents"] = {
         "defaults": {
             "model": {"primary": primary_model},
+            "models": {
+                primary_model: {"instructions": NEXUS_INSTRUCTIONS}
+            },
             "workspace": openclaw_workspace,
         }
     }

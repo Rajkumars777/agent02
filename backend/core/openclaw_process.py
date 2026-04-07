@@ -325,9 +325,8 @@ def start_gateway(port: int | None = None) -> dict:
     env["HOME"]          = openclaw_parent
     env["USERPROFILE"]   = openclaw_parent
 
-    creation_flags = 0
-    if os.name == "nt":
-        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP
+    CREATE_NO_WINDOW = 0x08000000
+    creation_flags  = CREATE_NO_WINDOW | (subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
 
     stdout_log = open(stdout_path, "a", encoding="utf-8")
     stderr_log = open(stderr_path, "a", encoding="utf-8")
@@ -494,7 +493,8 @@ def start_channel_pairing(channel: str = "whatsapp") -> dict:
     def _pair_reader():
         global _qr_data
         try:
-            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+            CREATE_NO_WINDOW = 0x08000000
+            creation_flags   = CREATE_NO_WINDOW | (subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
             proc = subprocess.Popen(
                 cmd, shell=False,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -542,10 +542,12 @@ def logout_channel(channel: str = "whatsapp") -> dict:
     env["USERPROFILE"]   = os.path.dirname(openclaw_home)
 
     try:
+        CREATE_NO_WINDOW = 0x08000000
         result = subprocess.run(
             cmd, shell=False,
             capture_output=True, text=True,
             env=env, timeout=30,
+            creationflags=CREATE_NO_WINDOW
         )
         output = (result.stdout + "\n" + result.stderr).strip()
         _gateway_log.append(f"[NEXUS] Logout: {output[:500]}")

@@ -18,55 +18,77 @@ logger = logging.getLogger(__name__)
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
+def _get_config_path():
+    """Consistent configuration path lookup used by the entire backend."""
+    return os.environ.get(
+        "NEXUS_CONFIG_PATH",
+        os.path.join(os.path.expanduser("~"), "AppData", "Local", "NEXUS", "config.json")
+    )
+
+CONFIG_PATH = _get_config_path()
 
 def _load_config() -> dict:
+    path = _get_config_path()
     try:
-        with open(CONFIG_PATH, "r") as f:
+        with open(path, "r") as f:
             cfg = json.load(f)
+            # Use environment variables as overrides for cloud keys
             if cfg.get("ai_provider") in ["google", "gemini"] and os.getenv("GEMINI_API_KEY"):
                 cfg["api_key"] = os.getenv("GEMINI_API_KEY")
-            elif cfg.get("ai_provider") != "openclaw" and os.getenv("OPENAI_API_KEY"):
+            elif cfg.get("ai_provider") == "openai" and os.getenv("OPENAI_API_KEY"):
                 cfg["api_key"] = os.getenv("OPENAI_API_KEY")
             return cfg
     except (FileNotFoundError, json.JSONDecodeError):
         return {
             "ai_provider": "google",
             "api_key": os.getenv("GEMINI_API_KEY", ""),
-            "ai_model": "gpt-4o",
+            "ai_model": "gemini-1.5-flash",
         }
 
+# Global client cache to allow hot-reloads
+_cached_client = None
+_cached_model = None
+
+def reload_agent():
+    """Clear the cached client state so it reloads from config.json on the next call."""
+    global _cached_client
+    _cached_client = None
+    load_dotenv()
+    logger.info("Agent reload requested: clearing LLM client cache.")
+
 def get_client():
+    global _cached_client, _cached_model
+    
+    if _cached_client:
+        return _cached_client, _cached_model
+    
     config = _load_config()
     provider = config.get("ai_provider", "google")
+    api_key = config.get("api_key", os.getenv("GEMINI_API_KEY", ""))
     
     if provider in ["google", "gemini"]:
-        model = config.get("ai_model", "gemini-2.5-flash").split("/")[-1]
-        api_key = config.get("api_key", os.getenv("GEMINI_API_KEY", ""))
-        return OpenAI(
+        model = config.get("ai_model", "gemini-1.5-flash").split("/")[-1]
+        _cached_model = model
+        _cached_client = OpenAI(
             api_key=api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-        ), model
+        )
+        return _cached_client, _cached_model
 
     if provider == "openclaw":
-        # Use direct OpenAI to prevent Gateway tool-hijacking (which corrupts files).
-        # Strip the 'openai/' provider prefix if present.
-        model = config.get("ai_model", "gemini-2.5-flash").split("/")[-1]
-        
-        # Support Google models via OpenClaw settings directly
-        if config.get("ai_model", "").startswith("google/") or "gemini" in config.get("ai_model", ""):
-            return OpenAI(
-                api_key=config.get("api_key", os.getenv("GEMINI_API_KEY", "")),
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-            ), model.replace("google/", "")
-            
-        return OpenAI(
-            api_key=config.get("openai_api_key", ""),
-            base_url="https://api.openai.com/v1"
-        ), model
+        model = config.get("ai_model", "gemini-1.5-flash").split("/")[-1]
+        _cached_model = model
+        auth_key = config.get("openclaw_token", os.getenv("GEMINI_API_KEY", ""))
+        _cached_client = OpenAI(
+            api_key=auth_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        return _cached_client, _cached_model
 
-    # Default: direct OpenAI / configured provider
-    return OpenAI(api_key=config.get("api_key", "")), config.get("ai_model", "gpt-4o")
+    # Default: direct OpenAI / other providers
+    _cached_model = config.get("ai_model", "gpt-4o")
+    _cached_client = OpenAI(api_key=api_key)
+    return _cached_client, _cached_model
 
 
 # ─── Main Entry Point ────────────────────────────────────────────────────────
