@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS — Starting</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 480px;
+    height: 320px;
+    overflow: hidden;
+    background: transparent;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+
+  .container {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #0d0d1a 0%, #1a0d2e 50%, #0d1a2e 100%);
+    border-radius: 20px;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 32px 64px rgba(0,0,0,0.8),
+      0 0 0 1px rgba(255,255,255,0.05),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  /* Animated background glow */
+  .glow {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.15;
+    animation: pulse 3s ease-in-out infinite;
+  }
+  .glow-1 { background: #8b5cf6; top: -80px; left: -60px; }
+  .glow-2 { background: #6366f1; bottom: -80px; right: -60px; animation-delay: 1.5s; }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.15; }
+    50%       { transform: scale(1.2); opacity: 0.25; }
+  }
+
+  /* Logo ring */
+  .logo-wrap {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    margin-bottom: 24px;
+  }
+
+  .logo-ring {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1, #06b6d4) border-box;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) padding-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    animation: spin 3s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .logo-inner {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1e1040, #0f0c29);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    font-weight: 800;
+    background-clip: text;
+    -webkit-background-clip: text;
+  }
+
+  .logo-text {
+    font-size: 36px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #a78bfa, #818cf8, #38bdf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -1px;
+  }
+
+  /* App name */
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+
+  .tagline {
+    font-size: 12px;
+    color: rgba(148, 163, 184, 0.7);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  /* Loading bar */
+  .bar-track {
+    width: 200px;
+    height: 3px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    width: 30%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #8b5cf6, #6366f1, #38bdf8);
+    animation: loading 1.6s ease-in-out infinite;
+  }
+
+  @keyframes loading {
+    0%   { transform: translateX(-100%); width: 40%; }
+    50%  { width: 60%; }
+    100% { transform: translateX(350%); width: 40%; }
+  }
+
+  .status {
+    margin-top: 14px;
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.5);
+    letter-spacing: 0.05em;
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 0.5; }
+    50%       { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+
+  <div class="logo-wrap">
+    <div class="logo-ring"></div>
+    <div class="logo-inner">
+      <span class="logo-text">N</span>
+    </div>
+  </div>
+
+  <h1>NEXUS</h1>
+  <p class="tagline">Autonomous AI Agent</p>
+
+  <div class="bar-track">
+    <div class="bar-fill"></div>
+  </div>
+  <p class="status">Starting services…</p>
+</div>
+</body>
+</html>

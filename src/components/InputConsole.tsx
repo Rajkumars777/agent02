@@ -2,12 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Command, Sparkles, Mic, Loader2, Square, X, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
+import { Send, Command, Sparkles, Mic, Loader2, Square, X, Paperclip, FileText, Image as ImageIcon, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWhisperRecording } from "@/hooks/useWhisperRecording";
 
 interface InputConsoleProps {
-  onSend: (message: string, files?: any[]) => void;
+  onSend: (message: string, files?: any[], useWeb?: boolean) => void;
   loading: boolean;
   lastCommand?: string;
 }
@@ -17,6 +17,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
   const [attachedFiles, setAttachedFiles] = useState<{ name: string; type: string; data: string }[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [useWeb, setUseWeb] = useState(false);
   
   useEffect(() => setMounted(true), []);
 
@@ -99,7 +100,7 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
     const text = input.trim();
     if ((!text && attachedFiles.length === 0) || loading) return;
     if (isWhisperRecording) stopWhisper();
-    onSend(text, attachedFiles);
+    onSend(text, attachedFiles, useWeb);
     setInput("");
     setAttachedFiles([]);
     resetWhisper();
@@ -244,6 +245,21 @@ export function InputConsole({ onSend, loading, lastCommand }: InputConsoleProps
 
           {/* Right buttons */}
           <div className="mr-1 mb-1.5 flex items-center gap-1.5">
+
+            {/* ── Button: Web Automation Toggle ── */}
+            <button
+              type="button"
+              onClick={() => setUseWeb(!useWeb)}
+              title={useWeb ? "Web Automation: Enabled" : "Web Automation: Disabled"}
+              className={cn(
+                "w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 relative overflow-hidden flex-shrink-0",
+                useWeb
+                  ? "bg-blue-500/20 text-blue-400 shadow-lg shadow-blue-500/20 border-blue-500/50"
+                  : "bg-secondary hover:bg-blue-500/10 text-muted-foreground hover:text-blue-400"
+              )}
+            >
+              <Globe className={cn("w-4 h-4 transition-transform", useWeb && "animate-pulse")} />
+            </button>
 
             {/* ── Button: Whisper Offline Voice ── */}
             {mounted && whisperSupported && (

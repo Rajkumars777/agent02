@@ -52,7 +52,9 @@ export default function RootLayout({
         className={`${outfit.variable} ${geistMono.variable} ${rajdhani.variable} ${exo2.variable} antialiased selection:text-white`}
       >
         <TauriProvider>
-          {children}
+          <div>
+            {children}
+          </div>
         </TauriProvider>
       </body>
     </html>

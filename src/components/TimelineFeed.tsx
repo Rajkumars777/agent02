@@ -3,23 +3,23 @@
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, CheckCircle2, Edit2, Copy, Check, Volume2, Square,
-  AlertTriangle, FolderOpen, FileText, ExternalLink, Download, Image as ImageIcon
+  AlertTriangle, FolderOpen, FileText, ExternalLink, Download, Image as ImageIcon,
+  MessageCircleQuestion, Send
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { openPath } from "@/lib/api";
 import { useSpeechSynthesis } from "@/hooks/useSpeech";
 import { ChartBlock } from "@/components/ChartBlock";
 
 export type Step = {
-  type: "Reasoning" | "Decision" | "Action" | "User";
+  type: "Reasoning" | "Decision" | "Action" | "User" | "Question";
   content: string;
   timestamp: string;
   attachment?: {
-    type: "image" | "video" | "audio" | "options" | "web_result";
+    type: "image" | "video" | "audio" | "options" | "web_result" | "question_input";
     url?: string;
     name?: string;
     data?: any;
@@ -31,6 +31,7 @@ export type Step = {
 interface TimelineFeedProps {
   steps: Step[];
   onOptionSelect?: (value: string) => void;
+  onAgentReply?: (answer: string) => void;
   onEdit?: (content: string) => void;
   isLoading?: boolean;
 }
@@ -365,8 +366,17 @@ function SpeakButton({ text }: { text: string }) {
 
 // ─── TimelineFeed ─────────────────────────────────────────────────────────────
 
-export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: TimelineFeedProps) {
+export function TimelineFeed({ steps, onOptionSelect, onAgentReply, onEdit, isLoading }: TimelineFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replySent, setReplySent] = useState<Record<number, boolean>>({});
+
+  const handleReply = async (groupIdx: number) => {
+    if (!replyText.trim() || !onAgentReply) return;
+    setReplySent(prev => ({ ...prev, [groupIdx]: true }));
+    await onAgentReply(replyText.trim());
+    setReplyText("");
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -374,11 +384,17 @@ export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: Timel
 
   if (steps.length === 0 && !isLoading) return null;
 
-  // Group consecutive AI steps together under one bubble
-  const groups: { type: "User" | "AI"; steps: Step[] }[] = [];
+  // Group steps into rendering blocks
+  // consecutive AI Actions/Decisions/Reasoning get combined.
+  // Questions and Users get their own blocks.
+  type RenderGroup = { type: "User" | "AI" | "Question"; steps: Step[] };
+  const groups: RenderGroup[] = [];
+
   steps.forEach((step) => {
     if (step.type === "User") {
       groups.push({ type: "User", steps: [step] });
+    } else if (step.type === "Question") {
+      groups.push({ type: "Question", steps: [step] });
     } else {
       const last = groups[groups.length - 1];
       if (last && last.type === "AI") {
@@ -394,6 +410,7 @@ export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: Timel
       <AnimatePresence mode="popLayout">
         {groups.map((group, groupIdx) => {
           const isUser = group.type === "User";
+          const isQuestion = group.type === "Question";
           const latestStep = group.steps[group.steps.length - 1];
           const isProcessing =
             group.type === "AI" &&
@@ -455,6 +472,64 @@ export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: Timel
             );
           }
 
+          // ── Question bubble ────────────────────────────────────────────────
+          if (isQuestion) {
+            return (
+              <motion.div
+                key={groupIdx}
+                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="flex justify-start group"
+              >
+                <div className="max-w-[85%] w-full">
+                  <div className="flex items-center gap-2 mb-1.5 ml-0.5">
+                    <div className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                      <MessageCircleQuestion className="w-3 h-3 text-indigo-400" />
+                    </div>
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-indigo-400/80">Question from Agent</span>
+                  </div>
+
+                  <div className="relative rounded-2xl rounded-tl-none px-4 py-3 shadow-xl border border-indigo-500/20 bg-indigo-950/20">
+                    <div className="prose dark:prose-invert max-w-none text-sm leading-relaxed text-indigo-200">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{latestStep.content}</ReactMarkdown>
+                    </div>
+
+                    {!replySent[groupIdx] ? (
+                      <div className="mt-4 flex gap-2">
+                        <input
+                          type="text"
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleReply(groupIdx);
+                          }}
+                          placeholder="Type your response to the agent here..."
+                          className="flex-1 text-sm bg-black/20 border border-indigo-500/30 rounded-lg px-3 py-2 text-white placeholder-white/30 focus:outline-none focus:border-indigo-400/50"
+                        />
+                        <button
+                          onClick={() => handleReply(groupIdx)}
+                          disabled={!replyText.trim()}
+                          className="px-3 py-2 bg-indigo-500/20 hover:bg-indigo-500/40 border border-indigo-500/30 rounded-lg disabled:opacity-50 flex items-center justify-center text-indigo-300"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-4 px-3 py-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Reply delivered successfully! Agent is continuing...
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-1 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-muted-foreground pr-0.5">
+                    <span>{latestStep.timestamp}</span>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          }
+
           // ── AI bubble ────────────────────────────────────────────────────
           const { content, isError, isCancelled } = pickBestContent(group.steps);
           const hasDecision = group.steps.some((s) => s.type === "Decision");
@@ -480,18 +555,18 @@ export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: Timel
                   </div>
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-primary/50">Nexus</span>
                   {isError && !isCancelled && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">
                       <AlertTriangle className="w-2.5 h-2.5" />
                       Failed
                     </span>
                   )}
                   {isCancelled && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
                       Cancelled
                     </span>
                   )}
                   {!isProcessing && !isError && !isCancelled && hasDecision && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                       <CheckCircle2 className="w-2.5 h-2.5" />
                       Done
                     </span>
@@ -503,9 +578,9 @@ export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: Timel
                   className={cn(
                     "relative rounded-2xl rounded-tl-none px-4 py-3 shadow-xl transition-all duration-300",
                     isError && !isCancelled
-                      ? "bg-red-950/25 border border-red-500/25 text-red-200"
+                      ? "bg-red-50/80 dark:bg-red-950/25 border border-red-200 dark:border-red-500/25 text-red-700 dark:text-red-200"
                       : isCancelled
-                      ? "bg-amber-950/20 border border-amber-500/20 text-amber-200"
+                      ? "bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200"
                       : "glass-pane border-white/8 text-foreground"
                   )}
                 >
@@ -520,7 +595,6 @@ export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: Timel
                       >
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
                           components={{
                             p: (props) => (
                               <p className="mb-2 last:mb-0">{processChildren(props.children)}</p>
@@ -535,7 +609,7 @@ export function TimelineFeed({ steps, onOptionSelect, onEdit, isLoading }: Timel
                             strong: (props) => (
                               <strong
                                 {...props}
-                                className={cn("font-bold", isError ? "text-red-200" : "text-primary")}
+                                className={cn("font-bold", isError ? "text-red-800 dark:text-red-200" : "text-primary")}
                               />
                             ),
                             // ── Detect ```chart blocks and render Recharts ──

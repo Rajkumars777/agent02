@@ -42,37 +42,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── FastAPI app (routers registered lazily in lifespan) ──────────────────────
+# ── FastAPI app ───────────────────────────────────────────────────────────────
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+# Import all routers at module level so FastAPI registers them correctly.
+# (include_router inside lifespan is silently ignored by FastAPI's route compiler)
+from api.routers import agent    as agent_router
+from api.routers import events   as events_router
+from api.routers import settings as settings_router
+from api.routers import openclaw as openclaw_router
+from api.routers import tools    as tools_router
+from api.routers import system   as system_router
+from api.routers import voice    as voice_router
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Import routers HERE so their heavy dependencies load after uvicorn
-    # is already listening — this is what makes the /health probe return fast.
-    from api.routers import agent    as agent_router
-    from api.routers import events   as events_router
-    from api.routers import settings as settings_router
-    from api.routers import openclaw as openclaw_router
-    from api.routers import tools    as tools_router
-    from api.routers import system   as system_router
-    from api.routers import voice    as voice_router
-
-    app.include_router(agent_router.router)
-    app.include_router(events_router.router)
-    app.include_router(settings_router.router)
-    app.include_router(openclaw_router.router)
-    app.include_router(tools_router.router)
-    app.include_router(system_router.router)
-    app.include_router(voice_router.router)
-
     logger.warning("NEXUS backend ready.")
     yield
+    # Gracefully close the browser-use Playwright browser (if it was used)
+    # so no zombie chrome.exe processes are left after the backend exits.
+    try:
+        from capabilities.browser_use_client import browser_client
+        await browser_client.close()
+    except Exception as _e:
+        logger.warning(f"[BrowserUse] Shutdown cleanup skipped: {_e}")
     logger.warning("NEXUS backend shutting down.")
 
 app = FastAPI(lifespan=lifespan, title="NEXUS Agent Backend", docs_url=None, redoc_url=None)
+
+# Register all routers
+app.include_router(agent_router.router)
+app.include_router(events_router.router)
+app.include_router(settings_router.router)
+app.include_router(openclaw_router.router)
+app.include_router(tools_router.router)
+app.include_router(system_router.router)
+app.include_router(voice_router.router)
 
 app.add_middleware(
     CORSMiddleware,

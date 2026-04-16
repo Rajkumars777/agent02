@@ -18,6 +18,7 @@ class AgentRequest(BaseModel):
     channel: Optional[str] = "nexus"
     sender: Optional[str] = "main"
     files: Optional[list[dict[str, Any]]] = None
+    use_web: Optional[bool] = False
 
 class CancelRequest(BaseModel):
     task_id: str
@@ -45,7 +46,8 @@ async def chat_with_agent(request: AgentRequest):
             task_id=task_id, 
             channel=channel, 
             sender=sender,
-            files=request.files
+            files=request.files,
+            use_web=request.use_web
         ))
         active_tasks[task_id] = task
         
@@ -90,10 +92,15 @@ async def cancel_operation(request: CancelRequest):
 
 @router.post("/resume")
 async def resume_operation(request: ResumeRequest):
-    """Resume a task that is waiting for input (e.g., confirmation)."""
-    # In the OpenClaw architecture, interactive tasks manage their own state.
-    # This endpoint provides a hook for future native interaction handlers.
-    return {"success": True, "message": "Interaction received", "task_id": request.task_id}
+    """Resume a browser task waiting for user input (credentials, etc.)."""
+    from capabilities.browser_use_client import browser_client
+    delivered = browser_client.provide_answer(request.task_id, str(request.data))
+    return {
+        "success": True,
+        "delivered": delivered,
+        "message": "Answer delivered to browser agent." if delivered else "No task was waiting.",
+        "task_id": request.task_id
+    }
 
 @router.get("/status")
 async def get_status():

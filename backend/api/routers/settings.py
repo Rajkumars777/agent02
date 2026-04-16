@@ -12,6 +12,8 @@ from typing import Optional
 import json
 import os
 import logging
+import winreg
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +151,55 @@ KEY_HINTS = {
     "groq":        "gsk_... key from console.groq.com",
 }
 
+def get_installed_browsers():
+    """Scan Windows Registry for installed browsers."""
+    browsers = []
+    # Standard browser registry keys
+    paths = {
+        "Google Chrome": {
+            "reg": r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe",
+            "channel": "chrome"
+        },
+        "Microsoft Edge": {
+            "reg": r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
+            "channel": "msedge"
+        },
+        "Brave": {
+            "reg": r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\brave.exe",
+            "channel": None # Use path
+        },
+        "Mozilla Firefox": {
+            "reg": r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\firefox.exe",
+            "channel": None
+        },
+        "Opera": {
+            "reg": r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\launcher.exe",
+            "channel": None
+        },
+    }
+    
+    for name, info in paths.items():
+        executable_path = None
+        # Check HKLM then HKCU
+        for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+            try:
+                with winreg.OpenKey(root, info["reg"]) as key:
+                    path, _ = winreg.QueryValueEx(key, "")
+                    if os.path.exists(path):
+                        executable_path = path
+                        break
+            except (FileNotFoundError, OSError):
+                continue
+        
+        if executable_path:
+            browsers.append({
+                "name": name,
+                "path": executable_path,
+                "channel": info["channel"]
+            })
+            
+    return browsers
+
 
 def _load_config() -> dict:
     path = os.environ.get("NEXUS_CONFIG_PATH", CONFIG_PATH)
@@ -236,18 +287,9 @@ def _reconfigure_openclaw(api_key: str, provider: str, model: str) -> str:
     if "auth" in cfg:
         del cfg["auth"]
 
-    NEXUS_INSTRUCTIONS = (
-        "You are NEXUS, an autonomous assistant with full desktop, terminal, and browser access. "
-        "You MUST perform tasks autonomously by writing and executing scripts. "
-        "NEVER describe your internal steps or ask for permission. Just DO IT."
-    )
-        
     cfg["agents"] = {
         "defaults": {
             "model": {"primary": primary_model},
-            "models": {
-                primary_model: {"instructions": NEXUS_INSTRUCTIONS}
-            },
             "workspace": openclaw_workspace,
         }
     }
@@ -275,6 +317,7 @@ class SettingsUpdate(BaseModel):
     openclaw_gateway_url: Optional[str] = None
     openclaw_channel: Optional[str] = None
     openclaw_token: Optional[str] = None
+    browser_engine: Optional[str] = None
 
 
 @router.get("/settings")
@@ -301,7 +344,13 @@ async def get_settings():
         "models": MODEL_CATALOGUE,
         "providers": PROVIDER_DISPLAY,
         "key_hints": KEY_HINTS,
+        "available_browsers": get_installed_browsers(),
     }
+
+@router.get("/browsers")
+async def list_browsers():
+    """Return only the list of detected browsers."""
+    return {"browsers": get_installed_browsers()}
 
 
 @router.post("/settings")

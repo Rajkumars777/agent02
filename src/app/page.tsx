@@ -28,6 +28,8 @@ export default function Dashboard() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [folders, setFolders] = useState<any[]>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  // Track which task_id is waiting for user reply (Human-in-the-Loop)
+  const [pendingReplyTaskId, setPendingReplyTaskId] = useState<string | null>(null);
 
   // Load history and folders on mount
   useEffect(() => {
@@ -108,19 +110,40 @@ export default function Dashboard() {
         return [...prev, { type: "Decision", content, timestamp }];
       }
 
-      // 4. Handle Questions (Interactive)
+      // 4. Handle Questions (Human-in-the-Loop)
       if (type === "AgentQuestion" || type === "REQUIRE_HELP") {
+        const questionText = toStr(data.question || data.prompt, "Agent requires input.");
+        const questionTaskId = toStr(data.task_id, "");
+        // Update the pending reply task id (stored outside setSteps since closures)
+        if (questionTaskId) setPendingReplyTaskId(questionTaskId);
         return [...prev, {
-          type: "Decision",
-          content: toStr(data.prompt || data.question, "Agent requires input."),
+          type: "Question" as any,
+          content: questionText,
           timestamp,
-          attachment: { type: "options", data: [{ label: "Reply to Agent", value: "REPLY_TRIGGER" }] }
+          attachment: { type: "question_input" as any, data: { task_id: questionTaskId } }
         }];
       }
 
       return prev;
     });
-  }, []);
+  }, [setPendingReplyTaskId]);
+
+  // Send user's credential reply to the waiting browser task
+  const handleAgentReply = useCallback(async (answer: string) => {
+    if (!pendingReplyTaskId || !answer.trim()) return;
+    try {
+      await resumeTask(pendingReplyTaskId, answer);
+      // Add a User-style step showing what was replied
+      setSteps(prev => [...prev, {
+        type: "User",
+        content: `🔑 ${answer}`,
+        timestamp: new Date().toLocaleTimeString()
+      }]);
+      setPendingReplyTaskId(null);
+    } catch (err) {
+      console.error("Failed to deliver reply:", err);
+    }
+  }, [pendingReplyTaskId]);
 
   useWebsocket(activeTaskId, handleWebSocketEvent);
 
@@ -191,7 +214,7 @@ export default function Dashboard() {
   };
 
   // Keep track of the latest agent thought process
-  const handleSend = async (input: string) => {
+  const handleSend = async (input: string, files?: any[], useWeb?: boolean) => {
     if (!input.trim()) return;
 
     setLoading(true);
@@ -213,7 +236,7 @@ export default function Dashboard() {
       const taskId = generateTaskId();
       setActiveTaskId(taskId);
 
-      const res = await chatWithAgent(input, taskId);
+      const res = await chatWithAgent(input, taskId, files, useWeb);
 
       if (res.cancelled) {
         if (!cancelled) {
@@ -281,7 +304,10 @@ export default function Dashboard() {
       </div>
 
       {/* Floating Controls */}
-      <div className="fixed top-8 left-8 right-8 flex justify-between items-center z-[100] pointer-events-none">
+      <div 
+        className="fixed left-8 right-8 flex justify-between items-center z-[100] pointer-events-none"
+        style={{ top: "calc(2rem + var(--titlebar-height, 0px))" }}
+      >
 
         {/* Left: New Chat + Assistant Mode */}
         <div className="flex items-center gap-2 pointer-events-auto">
@@ -453,6 +479,7 @@ export default function Dashboard() {
           <TimelineFeed
             steps={steps}
             onOptionSelect={handleOptionSelect}
+            onAgentReply={handleAgentReply}
             onEdit={(content) => {
               setLastCommand(""); // Force re-trigger of useEffect in InputConsole
               setTimeout(() => setLastCommand(content), 10);
@@ -481,7 +508,8 @@ export default function Dashboard() {
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="fixed top-0 right-0 bottom-0 w-80 bg-background border-l border-border z-[101] shadow-2xl"
+                className="fixed right-0 bottom-0 w-80 bg-background border-l border-border z-[101] shadow-2xl"
+                style={{ top: "var(--titlebar-height, 0px)" }}
               >
                 <div className="h-full flex flex-col">
                   {/* Drawer Header */}

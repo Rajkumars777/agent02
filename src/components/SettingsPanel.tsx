@@ -178,7 +178,7 @@ function StyledSelect({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-2 bg-slate-950/60 hover:bg-slate-900 border border-slate-700/60 hover:border-violet-500/40 rounded-xl px-4 py-3 text-sm font-medium text-slate-200 outline-none transition-all focus:ring-2 focus:ring-violet-500/30"
+        className="w-full flex items-center justify-between gap-2 bg-slate-50/80 dark:bg-slate-950/60 hover:bg-white dark:bg-slate-900 border border-slate-300/80 dark:border-slate-700/60 hover:border-violet-500/40 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-200 outline-none transition-all focus:ring-2 focus:ring-violet-500/30"
       >
         <span className={!selected ? "text-slate-500" : ""}>
           {selected?.label || placeholder || "Select…"}
@@ -193,7 +193,7 @@ function StyledSelect({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className="absolute z-50 top-full mt-1.5 left-0 right-0 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl shadow-black/40 overflow-hidden max-h-52 overflow-y-auto custom-scrollbar"
+            className="absolute z-50 top-full mt-1.5 left-0 right-0 bg-white dark:bg-slate-900 border border-slate-300/80 dark:border-slate-700/60 rounded-xl shadow-2xl shadow-black/40 overflow-hidden max-h-52 overflow-y-auto custom-scrollbar"
           >
             {options.map((opt) => (
               <button
@@ -202,7 +202,7 @@ function StyledSelect({
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 className={cn(
                   "w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors text-left hover:bg-violet-600/15",
-                  opt.value === value ? "text-violet-300 bg-violet-600/10 font-semibold" : "text-slate-300"
+                  opt.value === value ? "text-violet-300 bg-violet-600/10 font-semibold" : "text-slate-700 dark:text-slate-300"
                 )}
               >
                 <span className="truncate">{opt.label}</span>
@@ -225,6 +225,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [apiKeyMasked, setApiKeyMasked] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [aiModel, setAiModel] = useState("gpt-5.1-codex-mini");
+  const [browserEngine, setBrowserEngine] = useState("");
+  const [availableBrowsers, setAvailableBrowsers] = useState<{name: string, path: string}[]>([]);
 
   // ─── OpenClaw Gateway
   const [gwStatus, setGwStatus] = useState("stopped");
@@ -272,6 +274,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         const catalogue = MODEL_CATALOGUE[prov] || [];
         setAiModel(catalogue.includes(stripped) ? stripped : catalogue.includes(savedModel) ? savedModel : catalogue[0] || "");
         setApiKeyMasked(s.api_key_masked || "");
+        setBrowserEngine(s.browser_engine || "");
+
+        const bData = settingsData?.available_browsers || [];
+        setAvailableBrowsers(bData);
 
         if (sysData && !sysData.detail) setSysInfo(sysData);
 
@@ -343,6 +349,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       const payload: Record<string, string> = {
         ai_provider: aiProvider,
         ai_model: aiModel,
+        browser_engine: browserEngine
       };
       if (apiKey.trim()) payload.api_key = apiKey.trim();
 
@@ -370,32 +377,33 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       animate={{ x: 0 }}
       exit={{ x: "100%" }}
       transition={{ type: "spring", damping: 28, stiffness: 220 }}
-      className="fixed top-0 right-0 bottom-0 w-[480px] bg-slate-950/98 backdrop-blur-2xl border-l border-slate-800/60 z-[101] shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] flex flex-col font-sans"
+      className="fixed right-0 bottom-0 w-[480px] bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl border-l border-slate-200/80 dark:border-slate-800/60 z-[101] shadow-[0_0_80px_-20px_rgba(0,0,0,0.15)] dark:shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] flex flex-col font-sans"
+      style={{ top: "var(--titlebar-height, 0px)" }}
     >
       {/* Gradient accent top */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-500/60 to-transparent" />
 
       {/* Header */}
-      <div className="px-6 py-5 border-b border-slate-800/60 flex items-center justify-between">
+      <div className="px-6 py-5 border-b border-slate-200/80 dark:border-slate-800/60 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20">
             <Cpu className="w-5 h-5 text-violet-400" />
           </div>
           <div>
-            <h2 className="text-[15px] font-bold text-slate-100 tracking-tight">Settings</h2>
+            <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Settings</h2>
             <p className="text-[11px] text-slate-500 font-medium mt-0.5">NEXUS Configuration</p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="p-2 rounded-xl hover:bg-slate-800 text-slate-500 hover:text-slate-300 transition-colors"
+          className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-700 dark:text-slate-300 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex px-2 pt-2 border-b border-slate-800/60 bg-slate-950/50">
+      <div className="flex px-2 pt-2 border-b border-slate-200/80 dark:border-slate-800/60 bg-slate-100/80 dark:bg-slate-950/50">
         {[
           { id: "ai" as const, label: "AI Model", icon: Bot },
           { id: "openclaw" as const, label: "Gateway", icon: Globe },
@@ -408,7 +416,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               "flex-1 py-3 px-2 text-[12px] font-semibold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 border-b-2 rounded-t-lg -mb-px",
               activeTab === tab.id
                 ? "border-violet-500 text-violet-400 bg-violet-500/5"
-                : "border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/40"
+                : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-300 hover:bg-slate-200/40 dark:bg-slate-800/40"
             )}
           >
             <tab.icon className="w-3.5 h-3.5" />
@@ -447,7 +455,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
               {/* Provider */}
               <div className="space-y-2">
-                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                <label className="text-[11px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
                   <Globe className="w-3 h-3" /> AI Provider
                 </label>
                 <StyledSelect
@@ -459,7 +467,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
               {/* Model */}
               <div className="space-y-2">
-                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                <label className="text-[11px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
                   <Zap className="w-3 h-3" /> Foundation Model
                 </label>
                 <StyledSelect
@@ -473,16 +481,37 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 </p>
               </div>
 
+              {/* Browser Selection */}
+              <div className="space-y-2">
+                <label className="text-[11px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                  <Monitor className="w-3 h-3" /> Web Automation Browser
+                </label>
+                <StyledSelect
+                  value={browserEngine}
+                  onChange={setBrowserEngine}
+                  options={[
+                    { value: "", label: "Default (Bundled Chromium)" },
+                    ...availableBrowsers.map(b => ({ value: b.name, label: b.name }))
+                  ]}
+                  placeholder="Select system browser…"
+                />
+                <p className="text-[10px] text-slate-500 font-medium pl-1">
+                  {availableBrowsers.length > 0 
+                    ? `Detected ${availableBrowsers.length} installed browsers.` 
+                    : "No system browsers detected. Using bundled engine."}
+                </p>
+              </div>
+
               {/* API Key */}
               <div className="space-y-2">
-                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                <label className="text-[11px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
                   <Key className="w-3 h-3" /> API Key
                 </label>
 
                 {/* Current key display */}
                 {apiKeyMasked && !showKey && (
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-900/60 border border-slate-700/40 rounded-xl">
-                    <span className="text-sm font-mono text-slate-400 flex-1 truncate">{apiKeyMasked}</span>
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-white/80 dark:bg-slate-900/60 border border-slate-300/60 dark:border-slate-700/40 rounded-xl">
+                    <span className="text-sm font-mono text-slate-600 dark:text-slate-400 flex-1 truncate">{apiKeyMasked}</span>
                     <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Configured
                     </span>
@@ -497,12 +526,12 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder={apiKeyMasked ? "Enter new key to change…" : (KEY_HINTS[aiProvider] || "Paste API key…")}
-                    className="w-full bg-slate-950/60 hover:bg-slate-900/60 border border-slate-700/60 focus:border-violet-500/60 rounded-xl px-4 py-3 pr-12 text-sm font-mono text-slate-200 placeholder:text-slate-600 placeholder:font-sans outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+                    className="w-full bg-slate-50/80 dark:bg-slate-950/60 hover:bg-white/80 dark:bg-slate-900/60 border border-slate-300/80 dark:border-slate-700/60 focus:border-violet-500/60 rounded-xl px-4 py-3 pr-12 text-sm font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 placeholder:font-sans outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:text-slate-300 transition-colors"
                   >
                     {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -515,7 +544,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               </div>
 
               {/* Info box */}
-              <div className="flex gap-2.5 p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/60">
+              <div className="flex gap-2.5 p-3.5 rounded-xl bg-slate-100/60 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/60">
                 <RefreshCw className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
                 <p className="text-[11px] text-slate-500 leading-relaxed">
                   Saving will immediately reconfigure the AI engine and OpenClaw auth profile on this system. No restart required.
@@ -529,7 +558,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <div className="animate-in fade-in slide-in-from-bottom-3 duration-300 space-y-4">
 
               {/* Status Card */}
-              <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/60 space-y-4">
+              <div className="p-5 rounded-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/60 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={cn("w-2.5 h-2.5 rounded-full", statusDot)} />
@@ -538,7 +567,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 font-mono bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
+                    <span className="text-xs text-slate-500 font-mono bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800">
                       :{gwPort}
                     </span>
                     <button
@@ -560,7 +589,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 {gwModel && (
                   <div className="flex items-center gap-2 text-xs text-slate-500">
                     Model:
-                    <span className="text-slate-300 font-mono bg-slate-900/80 px-2 py-0.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-700 dark:text-slate-300 font-mono bg-slate-100/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
                       {gwModel}
                     </span>
                   </div>
@@ -578,7 +607,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 </div>
                 <div
                   ref={logsRef}
-                  className="bg-slate-950 rounded-xl border border-slate-800/60 p-4 h-[280px] overflow-y-auto font-mono text-[11px] text-emerald-400/80 custom-scrollbar"
+                  className="bg-white dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-slate-800/60 p-4 h-[280px] overflow-y-auto font-mono text-[11px] text-emerald-400/80 custom-scrollbar"
                 >
                   {gwLogs.length === 0 ? (
                     <span className="text-slate-600 italic">No logs yet…</span>
@@ -598,14 +627,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               {sysInfo ? (
                 <>
                   {/* CPU */}
-                  <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/60 flex items-center gap-4">
+                  <div className="p-5 rounded-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/60 flex items-center gap-4">
                     <div className="p-3 bg-violet-500/10 rounded-xl border border-violet-500/20">
                       <Cpu className="w-5 h-5 text-violet-400" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Processor</p>
                       <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-2xl font-black text-slate-100">{sysInfo.cpu?.percent ?? 0}%</span>
+                        <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{sysInfo.cpu?.percent ?? 0}%</span>
                         <span className="text-xs text-slate-500">{sysInfo.cpu?.cores || "?"} Cores</span>
                       </div>
                       <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -615,14 +644,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   </div>
 
                   {/* RAM */}
-                  <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/60 flex items-center gap-4">
+                  <div className="p-5 rounded-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/60 flex items-center gap-4">
                     <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
                       <HardDrive className="w-5 h-5 text-blue-400" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Memory</p>
                       <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-2xl font-black text-slate-100">{sysInfo.memory?.percent ?? 0}%</span>
+                        <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{sysInfo.memory?.percent ?? 0}%</span>
                         <span className="text-xs text-slate-500">
                           {((sysInfo.memory?.used || 0) / 1073741824).toFixed(1)} / {((sysInfo.memory?.total || 0) / 1073741824).toFixed(1)} GB
                         </span>
@@ -635,14 +664,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
                   {/* Battery */}
                   {sysInfo.battery?.percent !== null && (
-                    <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/60 flex items-center gap-4">
+                    <div className="p-5 rounded-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/60 flex items-center gap-4">
                       <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                         {sysInfo.battery?.plugged ? <BatteryCharging className="w-5 h-5 text-emerald-400" /> : <Battery className="w-5 h-5 text-emerald-400" />}
                       </div>
                       <div className="flex-1">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Battery</p>
                         <div className="flex items-baseline gap-2 mb-2">
-                          <span className="text-2xl font-black text-slate-100">{Math.round(sysInfo.battery?.percent)}%</span>
+                          <span className="text-2xl font-black text-slate-900 dark:text-slate-100">{Math.round(sysInfo.battery?.percent)}%</span>
                           <span className="text-xs text-slate-500">{sysInfo.battery?.plugged ? "Plugged In" : "On Battery"}</span>
                         </div>
                         <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -653,7 +682,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   )}
 
                   {/* System Specs */}
-                  <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800/60 space-y-3">
+                  <div className="p-5 rounded-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/60 space-y-3">
                     <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                       <Smartphone className="w-3.5 h-3.5" /> System Specs
                     </div>
@@ -662,17 +691,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                         { label: "Host", value: sysInfo.os?.node || "Unknown" },
                         { label: "Platform", value: sysInfo.os?.system || "Unknown" },
                       ].map((item) => (
-                        <div key={item.label} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/60">
+                        <div key={item.label} className="bg-slate-50/80 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800/60">
                           <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">{item.label}</p>
-                          <p className="text-xs font-semibold text-slate-300 truncate">{item.value}</p>
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{item.value}</p>
                         </div>
                       ))}
                     </div>
                     {sysInfo.gpu?.length > 0 && (
-                      <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/60">
+                      <div className="bg-slate-50/80 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800/60">
                         <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">GPU</p>
                         {sysInfo.gpu.map((g: string, i: number) => (
-                          <p key={i} className="text-xs font-semibold text-slate-300 truncate">{g}</p>
+                          <p key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{g}</p>
                         ))}
                       </div>
                     )}
@@ -690,7 +719,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       )}
 
       {/* Footer */}
-      <div className="p-5 border-t border-slate-800/60 bg-slate-950/80 space-y-3">
+      <div className="p-5 border-t border-slate-200/80 dark:border-slate-800/60 bg-slate-950/80 space-y-3">
         {/* Status message */}
         <AnimatePresence>
           {message && (

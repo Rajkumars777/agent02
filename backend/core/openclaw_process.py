@@ -213,15 +213,12 @@ def _get_config() -> dict:
 
 
 def _is_gateway_alive(port: int | None = None) -> bool:
-    """Check if the OpenClaw gateway is responding on the given port."""
-    import urllib.request
+    """Check if the OpenClaw gateway is listening on the given port (TCP probe)."""
+    import socket
     p = port or _gateway_port
     try:
-        # Probe the root or dashboard endpoint
-        req = urllib.request.urlopen(
-            f"http://127.0.0.1:{p}/", timeout=2
-        )
-        return req.status < 500
+        with socket.create_connection(("127.0.0.1", p), timeout=1):
+            return True
     except Exception:
         return False
 
@@ -264,27 +261,16 @@ def start_gateway(port: int | None = None) -> dict:
     config        = _get_config()
     _gateway_port = port or config.get("gateway", {}).get("port", 18789)
 
-    # Already alive (external process or ours)
+    # Already alive (port is listening) — don't restart
     if _is_gateway_alive(_gateway_port):
-        # 🔗 [NEXUS-34] Check for token mismatch if already running
-        try:
-            current_token = config.get("gateway", {}).get("auth", {}).get("token")
-            # Probe health/status to verify running token (if possible)
-            # For now, we force-restart if the config token doesn't match our state
-            if _status == "running" and _gateway_port == port:
-                 logger.info(f"Gateway already running on port {_gateway_port}")
-                 return {"success": True, "message": f"Gateway already running on port {_gateway_port}", "status": "running", "port": _gateway_port}
-            
-            # If we gets here, we might have a stale process with a different token
-            logger.warning(f"Gateway on port {_gateway_port} might be stale. Force restarting...")
-            stop_gateway()
-            time.sleep(2)
-        except Exception as e:
-            logger.error(f"Error checking gateway token: {e}")
+        _status = "running"
+        logger.info(f"Gateway already running on port {_gateway_port}")
+        return {"success": True, "message": f"Gateway already running on port {_gateway_port}",
+                "status": "running", "port": _gateway_port}
 
-    # Our process still alive
+    # Our process still alive but port not yet ready
     if _process and _process.poll() is None:
-        return {"success": True, "message": "Gateway process already running",
+        return {"success": True, "message": "Gateway process already starting",
                 "status": _status, "port": _gateway_port}
 
     _status = "starting"

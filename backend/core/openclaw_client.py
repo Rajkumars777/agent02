@@ -125,6 +125,40 @@ def get_gateway_config() -> tuple[int, str]:
     return port, token
 
 
+def _get_dynamic_system_context() -> str:
+    import platform
+    import getpass
+    import time
+    
+    home_dir = os.path.expanduser("~")
+    user_name = getpass.getuser()
+    os_name = platform.system()
+    os_release = platform.release()
+    current_time = time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime())
+    
+    # Check if a custom USER.md profile exists
+    openclaw_home = _get_openclaw_home()
+    user_md_path = os.path.join(openclaw_home, "workspace", "USER.md")
+    custom_profile = ""
+    if os.path.exists(user_md_path):
+        try:
+            with open(user_md_path, "r", encoding="utf-8") as f:
+                custom_profile = f"\n--- USER PROFILE OVERRIDES (from USER.md) ---\n{f.read()}\n---------------------------------------------\n"
+        except Exception:
+            pass
+
+    return (
+        f"--- DYNAMIC SYSTEM CONTEXT ---\n"
+        f"Operating System: {os_name} {os_release}\n"
+        f"Current User: {user_name}\n"
+        f"Home Directory: {home_dir}\n"
+        f"Desktop folder: {os.path.join(home_dir, 'Desktop')}\n"
+        f"Documents folder: {os.path.join(home_dir, 'Documents')}\n"
+        f"Downloads folder: {os.path.join(home_dir, 'Downloads')}\n"
+        f"Current Time: {current_time}\n"
+        f"{custom_profile}\n"
+    )
+
 # ─── Main gateway client ──────────────────────────────────────────────────────
 
 def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main", files: list[dict] = None, on_delta: Optional[Callable[[str], None]] = None) -> str:
@@ -477,6 +511,7 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
             "    f. Use POST /tools/browser/fill to enter it, then continue automation\n"
             "    EXAMPLE: 'I encountered a login wall on GitHub. Please provide your GitHub password\n"
             "    (your username github.com/yourname is already entered):'\n\n"
+            f"{_get_dynamic_system_context()}"
             f"USER REQUEST: {user_text}"
         )
 

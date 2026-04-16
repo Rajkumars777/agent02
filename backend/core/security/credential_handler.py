@@ -5,6 +5,8 @@ Handles credential requests for web automation.
 Shows popup to user when login is needed.
 """
 
+import os
+import json
 import tkinter as tk
 from tkinter import simpledialog, messagebox
 from typing import Optional, Dict
@@ -18,11 +20,42 @@ class CredentialHandler:
     
     def __init__(self):
         self.credentials_cache = {}
+        self.creds_file_path = self._get_creds_path()
+        self._load_cache()
+
+    def _get_creds_path(self) -> str:
+        base_dir = os.environ.get(
+            "NEXUS_CONFIG_PATH",
+            os.path.join(os.path.expanduser("~"), "AppData", "Local", "NEXUS")
+        )
+        if base_dir.endswith("config.json"):
+            base_dir = os.path.dirname(base_dir)
+        
+        # Ensure dir exists
+        os.makedirs(base_dir, exist_ok=True)
+        return os.path.join(base_dir, "credentials.json")
+
+    def _load_cache(self):
+        try:
+            if os.path.exists(self.creds_file_path):
+                with open(self.creds_file_path, 'r') as f:
+                    self.credentials_cache = json.load(f)
+        except Exception as e:
+            print(f"Error loading credentials: {e}")
+            self.credentials_cache = {}
+
+    def _save_cache(self):
+        try:
+            with open(self.creds_file_path, 'w') as f:
+                json.dump(self.credentials_cache, f)
+        except Exception as e:
+            print(f"Error saving credentials: {e}")
     
     def request_credentials(
         self,
         site: str,
-        fields: list = None
+        fields: list = None,
+        force: bool = False
     ) -> Optional[Dict[str, str]]:
         """
         Requests credentials from user via popup.
@@ -30,6 +63,7 @@ class CredentialHandler:
         Args:
             site: Website name (e.g., "Gmail", "Amazon")
             fields: List of field names (default: ["username", "password"])
+            force: If True, bypasses the cache and forces the user popup.
         
         Returns:
             {"username": "...", "password": "..."} or None if cancelled
@@ -39,13 +73,8 @@ class CredentialHandler:
         
         # Check cache first
         cache_key = f"{site}:{','.join(fields)}"
-        if cache_key in self.credentials_cache:
-            reuse = messagebox.askyesno(
-                "Credentials Found",
-                f"Use saved credentials for {site}?"
-            )
-            if reuse:
-                return self.credentials_cache[cache_key]
+        if not force and cache_key in self.credentials_cache:
+            return self.credentials_cache[cache_key]
         
         # Show credential dialog
         credentials = {}
@@ -81,15 +110,9 @@ class CredentialHandler:
             
             credentials[field] = value
         
-        # Ask to save
-        save = messagebox.askyesno(
-            "Save Credentials?",
-            f"Save these credentials for {site}?\n\n"
-            f"(They will only be stored for this session)"
-        )
-        
-        if save:
-            self.credentials_cache[cache_key] = credentials
+        # Automatically save credentials
+        self.credentials_cache[cache_key] = credentials
+        self._save_cache()
         
         root.destroy()
         return credentials
@@ -102,6 +125,7 @@ class CredentialHandler:
                 del self.credentials_cache[key]
         else:
             self.credentials_cache.clear()
+        self._save_cache()
 
 
 # Global instance

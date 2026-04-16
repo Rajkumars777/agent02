@@ -24,8 +24,18 @@ docx2pdf
 faster-whisper>=1.0.3
 
 # ─────────────────────────────────────────────────────
+# Autonomous Web Automation (browser-use + Playwright)
+# ─────────────────────────────────────────────────────
+browser-use>=0.1.40
+playwright>=1.44.0
+langchain>=0.3.0
+langchain-openai>=0.3.0
+langchain-google-genai>=1.0.0
+
+# ─────────────────────────────────────────────────────
 # Desktop Application (build only)
 # ─────────────────────────────────────────────────────
 pyinstaller>=6.0.0
 pystray>=0.19.5
 Pillow>=10.0.0
+browser-cookie3==0.20.1

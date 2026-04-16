@@ -93,10 +93,56 @@ def get_client():
 
 # ─── Main Entry Point ────────────────────────────────────────────────────────
 
-async def run_agent(user_input: str, task_id: str = "default", channel: str = "nexus", sender: str = "main", files: list[dict] = None):
+async def run_agent(user_input: str, task_id: str = "default", channel: str = "nexus", sender: str = "main", files: list[dict] = None, use_web: bool = False):
     from api.routers.events import emit_event
     from core.openclaw_client import send_to_openclaw
 
+    if use_web:
+        await emit_event(task_id, "Thinking", {"message": "Initializing Browser Automation..."})
+        try:
+            from capabilities.browser_use_client import browser_client
+            logger.info(f"Routing execution to Browser-Use for: {user_input}")
+            
+            result_text = "Task completed."
+            async for update in browser_client.run_task(user_input, task_id=task_id):
+                status = update.get("status")
+                if status == "needs_input":
+                    # Agent is paused and waiting for credentials/info from user
+                    question = update.get("question", "Please provide the required information.")
+                    await emit_event(task_id, "AgentQuestion", {
+                        "question": question,
+                        "task_id": task_id
+                    })
+                    # The run_task generator is now paused internally.
+                    # It will resume when /agent/resume is called by the frontend.
+                elif status == "error":
+                    msg = update.get("message", "Unknown error")
+                    await emit_event(task_id, "AgentStep", {"desc": f"Error: {msg}", "tool": "Browser", "success": False})
+                    result_text = msg
+                elif status == "running":
+                    thought = update.get("thought", "")
+                    action = update.get("action", "")
+                    if thought:
+                        # Emitting "Thinking" creates the nice reasoning blocks
+                        await emit_event(task_id, "Thinking", {"message": thought})
+                    if action:
+                        await emit_event(task_id, "AgentStep", {"desc": action, "tool": "Browser", "success": True})
+                elif status == "done":
+                    result_text = update.get("result", "Browser task finished.")
+                    # Ensure it is a string if it's a list or dict
+                    if not isinstance(result_text, str):
+                        result_text = str(result_text)
+
+            await emit_event(task_id, "AgentDone", {"result": result_text})
+            return _format_response(result_text, "Browser-Use", success=True)
+            
+        except Exception as e:
+            logger.error(f"Browser automation error: {e}")
+            error_msg = f"Browser Error: {str(e)}"
+            await emit_event(task_id, "AgentStep", {"desc": error_msg})
+            return _format_response(error_msg, "Error", success=False)
+
+    # Standard OpenClaw route
     await emit_event(task_id, "Thinking", {"message": "Forwarding request to OpenClaw Engine..."})
 
     try:

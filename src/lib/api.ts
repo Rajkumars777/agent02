@@ -60,7 +60,7 @@ export async function fetchHealth() {
     return res.json();
 }
 
-export async function chatWithAgent(message: string, taskId?: string, files?: any[]) {
+export async function chatWithAgent(message: string, taskId?: string, files?: any[], useWeb?: boolean) {
     // Cancel any previous request
     if (currentAbortController) {
         currentAbortController.abort();
@@ -71,14 +71,16 @@ export async function chatWithAgent(message: string, taskId?: string, files?: an
 
     try {
         const base = await getApiBase();
+        const payload = { 
+            input: message, 
+            task_id: currentTaskId,
+            files: files,
+            use_web: useWeb
+        };
         const res = await fetch(`${base}/agent/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                input: message, 
-                task_id: currentTaskId,
-                files: files 
-            }),
+            body: JSON.stringify(payload),
             signal: currentAbortController.signal
         });
         await checkResponse(res);
@@ -234,10 +236,15 @@ export async function saveOpenClawConfig(config: unknown) {
     return res.json();
 }
 export async function getHistory() {
-    const base = await getApiBase();
-    const res = await fetch(`${base}/agent/history`);
-    await checkResponse(res);
-    return res.json();
+    try {
+        const base = await getApiBase();
+        const res = await fetch(`${base}/agent/history`);
+        if (!res.ok) return { history: [] };
+        await checkResponse(res);
+        return res.json();
+    } catch {
+        return { history: [] };
+    }
 }
 
 export async function saveHistory(history: string[]) {
@@ -252,10 +259,15 @@ export async function saveHistory(history: string[]) {
 }
 
 export async function getFolders() {
-    const base = await getApiBase();
-    const res = await fetch(`${base}/agent/folders`);
-    await checkResponse(res);
-    return res.json();
+    try {
+        const base = await getApiBase();
+        const res = await fetch(`${base}/agent/folders`);
+        if (!res.ok) return { folders: [] };
+        await checkResponse(res);
+        return res.json();
+    } catch {
+        return { folders: [] };
+    }
 }
 
 export async function saveFolders(folders: any[]) {
@@ -283,6 +295,13 @@ export async function openPath(path: string) {
 export async function getSystemInfo() {
     const base = await getApiBase();
     const res = await fetch(`${base}/system/info`);
+    await checkResponse(res);
+    return res.json();
+}
+
+export async function getBrowsers() {
+    const base = await getApiBase();
+    const res = await fetch(`${base}/agent/browsers`);
     await checkResponse(res);
     return res.json();
 }

@@ -1,11 +1,62 @@
 {
-  "name": "agent02",
+  "name": "nexus-agent",
   "version": "1.0.0",
+  "description": "NEXUS — Autonomous AI Desktop Agent",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.nexus.agent",
+    "productName": "NEXUS",
+    "copyright": "Copyright © 2026 NEXUS AI",
+    "directories": {
+      "output": "electron-dist"
+    },
+    "files": [
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!venv/**/*",
+          "!__pycache__/**/*",
+          "!**/__pycache__/**/*",
+          "!build/**/*",
+          "!dist/**/*"
+        ]
+      },
+      {
+        "from": "out",
+        "to": "out"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NEXUS Agent"
+    }
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -21,9 +72,11 @@
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.0.1",
     "next": "15.2.4",
+    "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
     "react": "^18",
     "react-dom": "^18",
+    "react-is": "^19.2.5",
     "react-markdown": "^9.0.1",
     "recharts": "^3.8.1",
     "rehype-raw": "^7.0.0",
@@ -35,6 +88,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.0.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

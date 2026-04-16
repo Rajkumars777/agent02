@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Query, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import os
+import json
 import tempfile
 from typing import List, Optional
 import logging
@@ -76,6 +78,10 @@ class BrowserAnalyzeRequest(BaseModel):
 
 class BrowserTabRequest(BaseModel):
     tab_id: Optional[str] = None
+
+class BrowserAgentTaskRequest(BaseModel):
+    instruction: str
+    use_vision: bool = False   # opt-in Vision mode (more expensive)
 
 
 # ── Status & Discovery ────────────────────────────────────────────────────────
@@ -265,6 +271,68 @@ async def browser_check_disruption(tab_id: Optional[str] = None):
     """
     from capabilities.vision_browser import detect_disruption
     return await detect_disruption(tab_id)
+
+
+# ── Autonomous Agent Task (browser-use + Playwright) ──────────────────────────
+#
+# Executes a natural-language instruction autonomously in a persistent
+# Playwright browser. Progress is streamed back to the client via SSE
+# (Server-Sent Events) so the frontend can render step-by-step updates.
+#
+# Requires: pip install browser-use playwright langchain-openai langchain-google-genai
+#           playwright install chromium --with-deps
+
+@router.post("/browser/agent-task")
+async def browser_agent_task(req: BrowserAgentTaskRequest):
+    """
+    Run a high-level, natural-language web automation task autonomously.
+
+    The agent plans and executes multi-step browser interactions without
+    requiring explicit selectors or page scripts.
+
+    Examples:
+      - "Search for the latest AI news and summarize the top 3 articles"
+      - "Go to github.com/trending and list the top 5 Python repos today"
+      - "Find the current price of NVIDIA stock on Google Finance"
+
+    Returns a Server-Sent Events (text/event-stream) stream. Each event is:
+      data: {"status": "running", "thought": "...", "action": "..."}
+      data: {"status": "done",    "result": "..."}
+      data: {"status": "error",   "message": "..."}
+    """
+    from capabilities.browser_use_client import browser_client
+
+    use_vision = req.use_vision
+
+    async def event_stream():
+        try:
+            # Route to vision-aware agent if explicitly requested
+            task_gen = (
+                browser_client.run_task_with_vision(req.instruction)
+                if use_vision
+                else browser_client.run_task(req.instruction)
+            )
+            async for update in task_gen:
+                # SSE format: each event must be `data: <json>\n\n`
+                yield f"data: {json.dumps(update)}\n\n"
+
+        except RuntimeError as e:
+            # Browser couldn't start (e.g., Playwright not installed yet)
+            err = {"status": "error", "message": str(e)}
+            yield f"data: {json.dumps(err)}\n\n"
+        except Exception as e:
+            logger.error(f"[AgentTask] Unhandled error: {e}")
+            err = {"status": "error", "message": str(e)}
+            yield f"data: {json.dumps(err)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # Prevent nginx from buffering SSE
+        },
+    )
 
 
 # ─── Desktop Management ───────────────────────────────────────────────────────
