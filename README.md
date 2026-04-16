@@ -17,7 +17,7 @@
 
 ---
 
-## 💎 THE NEXUS PHILOSOPHY
+## THE NEXUS PHILOSOPHY
 
 NEXUS is not a chatbot. It is a **local-first autonomous operator**. Built for power users and developers, it bridges the gap between high-level LLM reasoning and low-level system execution. NEXUS lives in an Electron shell, manages its own browser sessions, and treats your entire operating system as its workspace.
 
@@ -129,15 +129,6 @@ NEXUS is built with a **Security-First** mindset:
 *   **Signed RPC**: Every command sent to the execution gateway is verified via **Ed25519 cryptographic signatures**.
 *   **Vault Protection**: Credentials are stored in your local user profile (`AppData/Local/NEXUS`) and are never synced to any cloud.
 *   **Full Transparency**: Every action taken by the agent is streamed live to the **Timeline Feed** with clickable source code for review.
-
----
-
-## 🤝 CONTRIBUTING
-
-We welcome contributors who want to push the boundaries of autonomous agents.
-1. Fork the repo and create your feature branch.
-2. Ensure you follow the coding standards in `backend/core/`.
-3. Submit a PR with detailed video/screenshot walkthroughs of your changes.
 
 ---
 
