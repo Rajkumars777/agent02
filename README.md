@@ -7,7 +7,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-Gateway-FF6B35?style=for-the-badge)](https://openclaw.dev)
 
-![NEXUS Mission Control Banner](assets/hero.png)
 
 NEXUS is a premium, fully autonomous AI agent designed for seamless desktop and web automation. It doesn't just provide instructions—it executes tasks directly on your machine. From managing complex file systems and Office documents to navigating live web interfaces and authenticated sessions, NEXUS operates as a native desktop companion via an Electron-powered shell.
 
