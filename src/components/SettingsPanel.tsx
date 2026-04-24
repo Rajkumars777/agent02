@@ -226,6 +226,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [showKey, setShowKey] = useState(false);
   const [aiModel, setAiModel] = useState("gpt-5.1-codex-mini");
   const [browserEngine, setBrowserEngine] = useState("");
+  const [interfaceMode, setInterfaceMode] = useState("dialogue");
   const [availableBrowsers, setAvailableBrowsers] = useState<{name: string, path: string}[]>([]);
 
   // ─── OpenClaw Gateway
@@ -275,6 +276,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         setAiModel(catalogue.includes(stripped) ? stripped : catalogue.includes(savedModel) ? savedModel : catalogue[0] || "");
         setApiKeyMasked(s.api_key_masked || "");
         setBrowserEngine(s.browser_engine || "");
+
+        const savedMode = localStorage.getItem("nexus-interface-mode") || "dialogue";
+        setInterfaceMode(savedMode);
 
         const bData = settingsData?.available_browsers || [];
         setAvailableBrowsers(bData);
@@ -354,6 +358,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       if (apiKey.trim()) payload.api_key = apiKey.trim();
 
       await saveSettings(payload);
+      
+      localStorage.setItem("nexus-interface-mode", interfaceMode);
+      window.dispatchEvent(new Event("nexus-settings-updated"));
+      
       setApiKeyMasked(apiKey.trim() ? apiKey.trim().slice(0, 4) + "•••••••" + apiKey.trim().slice(-4) : apiKeyMasked);
       setApiKey("");
       setShowKey(false);
@@ -499,6 +507,25 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   {availableBrowsers.length > 0 
                     ? `Detected ${availableBrowsers.length} installed browsers.` 
                     : "No system browsers detected. Using bundled engine."}
+                </p>
+              </div>
+
+              {/* Interface Mode Selection */}
+              <div className="space-y-2">
+                <label className="text-[11px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                  <Monitor className="w-3 h-3" /> Interface Mode
+                </label>
+                <StyledSelect
+                  value={interfaceMode}
+                  onChange={setInterfaceMode}
+                  options={[
+                    { value: "dialogue", label: "Dialogue Mode (Default)" },
+                    { value: "static", label: "Static Mode (No Chat Bubbles)" }
+                  ]}
+                  placeholder="Select Interface Mode…"
+                />
+                <p className="text-[10px] text-slate-500 font-medium pl-1">
+                  Static Mode turns prompts into dynamic blocks and hides agent responses.
                 </p>
               </div>
 

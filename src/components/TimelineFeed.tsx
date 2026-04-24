@@ -34,6 +34,7 @@ interface TimelineFeedProps {
   onAgentReply?: (answer: string) => void;
   onEdit?: (content: string) => void;
   isLoading?: boolean;
+  interfaceMode?: "dialogue" | "static";
 }
 
 // ─── Content Sanitizer ────────────────────────────────────────────────────────
@@ -366,7 +367,7 @@ function SpeakButton({ text }: { text: string }) {
 
 // ─── TimelineFeed ─────────────────────────────────────────────────────────────
 
-export function TimelineFeed({ steps, onOptionSelect, onAgentReply, onEdit, isLoading }: TimelineFeedProps) {
+export function TimelineFeed({ steps, onOptionSelect, onAgentReply, onEdit, isLoading, interfaceMode = "dialogue" }: TimelineFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [replyText, setReplyText] = useState("");
   const [replySent, setReplySent] = useState<Record<number, boolean>>({});
@@ -419,6 +420,22 @@ export function TimelineFeed({ steps, onOptionSelect, onAgentReply, onEdit, isLo
 
           // ── User bubble ──────────────────────────────────────────────────
           if (isUser) {
+            let userStatus = "running";
+            if (interfaceMode === "static") {
+              const nextGroup = groups[groupIdx + 1];
+              if (nextGroup?.type === "AI") {
+                const { isError, isCancelled } = pickBestContent(nextGroup.steps);
+                const hasDecision = nextGroup.steps.some(s => s.type === "Decision");
+                if (isError || isCancelled) {
+                  userStatus = "error";
+                } else if (hasDecision || (!isLoading && groupIdx === groups.length - 2)) {
+                  userStatus = "done";
+                }
+              } else if (!isLoading && groupIdx === groups.length - 1) {
+                userStatus = "done";
+              }
+            }
+
             return (
               <motion.div
                 key={groupIdx}
@@ -428,7 +445,12 @@ export function TimelineFeed({ steps, onOptionSelect, onAgentReply, onEdit, isLo
                 className="flex justify-end group"
               >
                 <div className="max-w-[75%]">
-                  <div className="relative bg-primary text-primary-foreground rounded-2xl rounded-tr-none px-4 py-3 shadow-lg shadow-primary/15">
+                  <div className={cn(
+                    "relative text-primary-foreground rounded-2xl rounded-tr-none px-4 py-3 shadow-lg transition-colors duration-500",
+                    interfaceMode === "static" && userStatus === "done" ? "bg-emerald-600 shadow-emerald-500/20" :
+                    interfaceMode === "static" && userStatus === "error" ? "bg-red-600 shadow-red-500/20" :
+                    "bg-primary shadow-primary/15"
+                  )}>
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{latestStep.content}</p>
                     
                     {/* User Attached Files */}
@@ -452,7 +474,12 @@ export function TimelineFeed({ steps, onOptionSelect, onAgentReply, onEdit, isLo
                     )}
 
                     {/* Corner nub */}
-                    <div className="absolute top-0 right-[-6px] w-0 h-0 border-t-[8px] border-t-primary border-r-[6px] border-r-transparent" />
+                    <div className={cn(
+                      "absolute top-0 right-[-6px] w-0 h-0 border-t-[8px] border-r-[6px] border-r-transparent transition-colors duration-500",
+                      interfaceMode === "static" && userStatus === "done" ? "border-t-emerald-600" :
+                      interfaceMode === "static" && userStatus === "error" ? "border-t-red-600" :
+                      "border-t-primary"
+                    )} />
                   </div>
                   <div className="mt-1 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-muted-foreground pr-0.5">
                     {onEdit && (
@@ -533,6 +560,10 @@ export function TimelineFeed({ steps, onOptionSelect, onAgentReply, onEdit, isLo
           // ── AI bubble ────────────────────────────────────────────────────
           const { content, isError, isCancelled } = pickBestContent(group.steps);
           const hasDecision = group.steps.some((s) => s.type === "Decision");
+          
+          if (interfaceMode === "static" && group.type === "AI" && !isError && !isCancelled) {
+             return null; 
+          }
 
           const prevUserGroup = groups[groupIdx - 1];
           const queryText = prevUserGroup?.type === "User" ? prevUserGroup.steps[prevUserGroup.steps.length - 1].content : "N/A";

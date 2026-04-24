@@ -1,41 +1,51 @@
 # ─────────────────────────────────────────────────────
-# Core Web Framework and API Utilities
+# NEXUS Backend — Runtime Dependencies
+# Installed on first launch via nexus_launcher.py
 # ─────────────────────────────────────────────────────
+
+# ── Core Web Framework ────────────────────────────────
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
-python-multipart==0.0.6
-python-dotenv==1.0.0
+python-multipart
+python-dotenv
+
+# ── HTTP / Networking ─────────────────────────────────
 requests>=2.32.3
 aiohttp>=3.10.5
-httpx>=0.27.2
+httpx
 websocket-client>=1.6.0
 cryptography>=42.0.0
+
+# ── System Utilities ──────────────────────────────────
 psutil>=5.9.0
 AppOpener>=1.7.0
-yfinance
+
+# ── AI Providers ─────────────────────────────────────
+openai
+
+# ── Document / Data Processing (Agent Tools) ─────────
+# The agent system prompt tells the AI to use these directly.
+# They MUST be present on first run.
 pandas
 openpyxl>=3.1.5
-openai
 python-docx
 python-pptx
 reportlab
 PyPDF2
-docx2pdf
-faster-whisper>=1.0.3
 
-# ─────────────────────────────────────────────────────
-# Autonomous Web Automation (browser-use + Playwright)
-# ─────────────────────────────────────────────────────
+# ── Document Conversion ───────────────────────────────
+docx2pdf
+
+# ── Autonomous Web Automation ─────────────────────────
 browser-use>=0.1.40
 playwright>=1.44.0
 langchain>=0.3.0
 langchain-openai>=0.3.0
 langchain-google-genai>=1.0.0
 
-# ─────────────────────────────────────────────────────
-# Desktop Application (build only)
-# ─────────────────────────────────────────────────────
-pyinstaller>=6.0.0
+# ── Desktop / Tray (Launcher) ─────────────────────────
 pystray>=0.19.5
 Pillow>=10.0.0
-browser-cookie3==0.20.1
+
+# ── Voice Transcription (lazy-loaded on demand) ───────
+faster-whisper>=1.0.3

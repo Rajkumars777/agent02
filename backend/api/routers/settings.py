@@ -408,17 +408,40 @@ async def update_settings(update: SettingsUpdate):
         except Exception as e:
             logger.warning(f"Could not write .env: {e}")
 
-    # Reload agent config
+    # Reload agent LLM client cache
     try:
         from core.agent import reload_agent
         reload_agent()
     except Exception as e:
         logger.warning(f"Could not reload agent: {e}")
 
-    logger.info("✅ Settings updated and OpenClaw reconfigured")
+    # ── Restart OpenClaw gateway so new model config takes effect immediately ──
+    gateway_restarted = False
+    if api_key and provider and model:
+        try:
+            import threading
+            from core.openclaw_process import stop_gateway, start_gateway
+
+            def _restart_gw():
+                try:
+                    stop_gateway()
+                    import time; time.sleep(1)
+                    start_gateway()
+                    logger.info("OpenClaw gateway restarted with new model config")
+                except Exception as ex:
+                    logger.warning(f"Gateway restart error: {ex}")
+
+            threading.Thread(target=_restart_gw, daemon=True).start()
+            gateway_restarted = True
+        except Exception as e:
+            logger.warning(f"Could not restart gateway: {e}")
+
+    logger.info("Settings updated, OpenClaw reconfigured, gateway restarting")
     return {
         "success": True,
-        "message": "Settings saved. AI reconfigured.",
+        "message": "Settings saved. AI reconfigured." + (" Gateway restarting..." if gateway_restarted else ""),
         "provider": provider,
         "model": model,
+        "gateway_restarting": gateway_restarted,
     }
+

@@ -426,6 +426,16 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
                     "\n💡 Tip: The device token is missing the operator.write scope. "
                     "Re-pair the device with: openclaw device pair"
                 )
+            elif "model" in error_text.lower() or "404" in error_text:
+                tip = (
+                    "\n💡 Tip: The model name might be incorrect. "
+                    "Check your Settings and ensure the model exists for your AI provider."
+                )
+            elif "api key" in error_text.lower():
+                tip = (
+                    "\n💡 Tip: Your API key seems invalid or missing. "
+                    "Update it in the Settings panel."
+                )
             return f"❌ {error_text}{tip}"
 
         if not connected:
@@ -446,9 +456,10 @@ def send_to_openclaw(user_text: str, channel: str = "nexus", sender: str = "main
             "6. ONLY when the user explicitly asks you to generate, download, or create a specific file/report, store it in the user's `Downloads` directory by default.\n"
             "7. If a task is unfinished, undone, or encounters an error, you MUST format that specific text using HTML for bold red (e.g., `<span style=\"color:#ef4444; font-weight:bold\">ERROR: your message</span>`).\n"
             "8. Make your final response beautiful and premium using elegant markdown formatting and tables when useful.\n"
-            "9. If you need to manipulate Excel, Word, PPT or PDF files, first use the terminal to `pip install openpyxl python-docx python-pptx PyPDF2 pandas` before running your script.\n"
-            "10. NEVER be lazy. If the user asks for all files, you give all files. No exceptions.\n"
-            "11. LIVE DATA CHARTS — The NEXUS dashboard can render interactive charts directly in the chat. WHENEVER you analyze numerical data (CSV, Excel, JSON, databases, statistics, comparisons), you MUST output a chart using this EXACT format after your text summary:\n"
+            "9. The environment ALREADY has pandas, openpyxl, python-docx, python-pptx, and PyPDF2 pre-installed. DO NOT run `pip install` for them. Just import and use them instantly.\n"
+            "10. SECURITY CRITICAL: You MUST NEVER execute destructive commands like `os.remove()`, `os.unlink()`, `del`, `rm`, or `shutil.rmtree()`. To avoid leaving temporary `.py` script files in the user's directories, ALWAYS write your execution scripts into the system's `%TEMP%` directory (e.g. `import tempfile; tempfile.gettempdir()`). Let the operating system handle the cleanup securely.\n"
+            "11. NEVER be lazy. If the user asks for all files, you give all files. No exceptions.\n"
+            "12. LIVE DATA CHARTS — The NEXUS dashboard can render interactive charts directly in the chat. WHENEVER you analyze numerical data (CSV, Excel, JSON, databases, statistics, comparisons), you MUST output a chart using this EXACT format after your text summary:\n"
             "```chart\n"
             "{\n"
             "  \"type\": \"bar\",\n"

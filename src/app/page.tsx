@@ -25,6 +25,7 @@ export default function Dashboard() {
   // Always start with dark on server; sync from localStorage after mount to avoid hydration mismatch
   const [isDark, setIsDark] = useState<boolean>(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [interfaceMode, setInterfaceMode] = useState<"dialogue" | "static">("dialogue");
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [folders, setFolders] = useState<any[]>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -61,6 +62,19 @@ export default function Dashboard() {
       localStorage.setItem("nexus-theme", "light");
     }
   }, [isDark]);
+
+  // Load and listen for interface mode changes
+  useEffect(() => {
+    const stored = localStorage.getItem("nexus-interface-mode") as "dialogue" | "static";
+    if (stored) setInterfaceMode(stored);
+    
+    const handler = () => {
+      const mode = localStorage.getItem("nexus-interface-mode") as "dialogue" | "static";
+      if (mode) setInterfaceMode(mode);
+    };
+    window.addEventListener("nexus-settings-updated", handler);
+    return () => window.removeEventListener("nexus-settings-updated", handler);
+  }, []);
 
   // Ctrl+K keyboard shortcut to focus input
   useEffect(() => {
@@ -485,6 +499,7 @@ export default function Dashboard() {
               setTimeout(() => setLastCommand(content), 10);
             }}
             isLoading={loading}
+            interfaceMode={interfaceMode}
           />
         </div>
       </div>

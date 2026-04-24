@@ -164,9 +164,18 @@ class BrowserUseClient:
         return self._cfg
 
     def _load_local_cookies(self) -> list:
-        """Extract cookies seamlessly from Chrome using browser_cookie3."""
+        """
+        Optionally extract cookies from Chrome using browser_cookie3.
+        Skipped gracefully if the package is not installed (it's not in
+        requirements.txt — it causes DPAPI crashes on machines that don't
+        have Chrome or when run as a different Windows user).
+        """
         try:
-            import browser_cookie3
+            import browser_cookie3  # optional — may not be installed
+        except ImportError:
+            logger.info("[BrowserUse] browser_cookie3 not installed — skipping cookie mirror (OK)")
+            return []
+        try:
             # Extract from Chrome ONLY to prevent Windows DPAPI locks seen with Edge
             cj = browser_cookie3.chrome()
             cdp_cookies = []
@@ -186,7 +195,7 @@ class BrowserUseClient:
             logger.info(f"[BrowserUse] Extracted {len(cdp_cookies)} cookies from Chrome.")
             return cdp_cookies
         except Exception as e:
-            logger.error(f"[BrowserUse] Failed to extract Chrome cookies: {e}")
+            logger.warning(f"[BrowserUse] Cookie extraction skipped: {e}")
             return []
 
     def provide_answer(self, task_id: str, answer: str) -> bool:

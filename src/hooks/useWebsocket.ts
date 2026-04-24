@@ -54,7 +54,9 @@ export function useWebsocket(
                 };
 
                 ws.onerror = (e) => {
-                    console.error(`WS: Error for task ${taskId}`, e);
+                    // Use console.warn instead of console.error to prevent triggering
+                    // the Next.js dev error overlay for expected connection refusals
+                    console.warn(`WS: Connection error for task ${taskId}. Please ensure the backend is running.`);
                 };
 
                 ws.onclose = () => {

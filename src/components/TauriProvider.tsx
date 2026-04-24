@@ -66,6 +66,14 @@ export default function TauriProvider({
             setBackendPort(8000);
             setIsReady(true);
         }
+
+        // Global heartbeat to keep backend alive. 
+        // If the browser tab is closed, this stops, and backend knows to shut down.
+        const heartbeatInterval = setInterval(() => {
+            fetch("http://127.0.0.1:8000/health").catch(() => {});
+        }, 5000);
+
+        return () => clearInterval(heartbeatInterval);
     }, []);
 
     // Always render children

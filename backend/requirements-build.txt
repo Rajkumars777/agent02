@@ -1,0 +1,6 @@
+# ─────────────────────────────────────────────────────
+# NEXUS Build-Only Dependencies
+# Run: pip install -r requirements-build.txt
+# DO NOT ship or install these on end-user machines.
+# ─────────────────────────────────────────────────────
+pyinstaller>=6.0.0
